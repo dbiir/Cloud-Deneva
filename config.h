@@ -322,8 +322,7 @@ enum DATxnType {
 #define MAX_DA_TABLE_SIZE 10000
 
 
-extern TPCCTxnType g_tpcc_txn_type;
-//#define TXN_TYPE          TPCC_ALL
+#define TXN_TYPE          TPCC_ALL
 #define PERC_PAYMENT 0.0
 #define FIRSTNAME_MINLEN      8
 #define FIRSTNAME_LEN         16

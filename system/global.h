@@ -255,6 +255,7 @@ extern UInt32 g_max_items;
 extern UInt32 g_dist_per_wh;
 extern UInt32 g_cust_per_dist;
 extern UInt32 g_max_items_per_txn;
+extern TPCCTxnType g_tpcc_txn_type;
 
 // PPS (Product-Part-Supplier)
 extern UInt32 g_max_parts_per;
