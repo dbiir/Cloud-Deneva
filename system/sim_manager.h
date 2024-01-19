@@ -19,6 +19,16 @@
 
 #include "global.h"
 
+// Aria
+enum ARIA_PHASE {
+  ARIA_INIT = -1,
+  ARIA_COLLECT = 0,
+  ARIA_READ,
+  ARIA_RESERVATION,
+  ARIA_CHECK,
+  ARIA_COMMIT
+};
+
 class SimManager {
 public:
 	volatile bool sim_init_done;
@@ -36,6 +46,10 @@ public:
   uint64_t txn_cnt;
   uint64_t inflight_cnt;
   uint64_t last_da_query_time;
+  ARIA_PHASE aria_phase;
+  uint64_t batch_process_count;
+  uint64_t barrier_count;
+  bool * barriers;
 
   void init();
   bool is_setup_done();
@@ -56,6 +70,7 @@ public:
   void inc_epoch_txn_cnt();
   void decr_epoch_txn_cnt();
   double seconds_from_start(uint64_t time);
+  void next_aria_phase();
 };
 
 #endif

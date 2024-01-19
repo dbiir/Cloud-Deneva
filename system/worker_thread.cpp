@@ -159,7 +159,11 @@ void WorkerThread::process(Message * msg) {
   RC rc __attribute__ ((unused));
 
   DEBUG("%ld Processing %ld %d\n",get_thd_id(),msg->get_txn_id(),msg->get_rtype());
+#if CC_ALG == ARIA
+  assert(msg->get_rtype() == CL_QRY || msg->get_rtype() == CL_QRY_O || msg->get_rtype() == ARIA_ACK || msg->get_txn_id() != UINT64_MAX);
+#else
   assert(msg->get_rtype() == CL_QRY || msg->get_rtype() == CL_QRY_O || msg->get_txn_id() != UINT64_MAX);
+#endif
   uint64_t starttime = get_sys_clock();
 		switch(msg->get_rtype()) {
 			case RPASS:
@@ -203,6 +207,8 @@ void WorkerThread::process(Message * msg) {
 			case RTXN:
 #if CC_ALG == CALVIN
         rc = process_calvin_rtxn(msg);
+#elif CC_ALG == ARIA
+        rc = process_aria_rtxn(msg);
 #elif CC_ALG == MIXED_LOCK || CC_ALG == SNAPPER
         if (msg->algo == CALVIN) {
           rc = process_calvin_rtxn(msg);
@@ -313,8 +319,10 @@ void WorkerThread::commit() {
   INC_STATS(get_thd_id(), trans_total_count, 1);
 
   // Send result back to client
+#if CC_ALG != ARIA
 #if !SERVER_GENERATE_QUERIES
   msg_queue.enqueue(get_thd_id(),Message::create_message(txn_man,CL_RSP),txn_man->client_id);
+#endif
 #endif
   // remove txn from pool
   release_txn_man();
@@ -350,6 +358,7 @@ void WorkerThread::abort() {
   INC_STATS(get_thd_id(), trans_abort_count, 1);
   INC_STATS(get_thd_id(), trans_total_count, 1);
   #if WORKLOAD != DA //actually DA do not need real abort. Just count it and do not send real abort msg.
+  #if CC_ALG != ARIA
   #if CC_ALG == MIXED_LOCK || CC_ALG == SNAPPER
   uint64_t penalty =
       abort_queue.enqueue(get_thd_id(), txn_man->get_txn_id(), txn_man, txn_man->get_abort_cnt());
@@ -359,10 +368,11 @@ void WorkerThread::abort() {
   #endif
   txn_man->txn_stats.total_abort_time += penalty;
   #endif
+  #endif
 }
 
 TxnManager * WorkerThread::get_transaction_manager(Message * msg) {
-#if CC_ALG == CALVIN || CC_ALG == MIXED_LOCK || CC_ALG == SNAPPER
+#if CC_ALG == CALVIN || CC_ALG == MIXED_LOCK || CC_ALG == SNAPPER || CC_ALG == ARIA
   TxnManager* local_txn_man =
       txn_table.get_transaction_manager(get_thd_id(), msg->get_txn_id(), msg->get_batch_id());
 #else
@@ -427,7 +437,11 @@ RC WorkerThread::run() {
     }
   #endif
 
+#if CC_ALG != ARIA
     msg = work_queue.dequeue(get_thd_id());
+#else
+    msg = work_queue.work_dequeue(get_thd_id());
+#endif
 
 
     if(!msg) {
@@ -440,6 +454,12 @@ RC WorkerThread::run() {
       INC_STATS(_thd_id,worker_idle_time,get_sys_clock() - idle_starttime);
       idle_starttime = 0;
     }
+#if CC_ALG == ARIA
+    if (msg->rtype == ARIA_ACK) {
+      process_aria_ack(msg);
+      continue;
+    }
+#endif
     //uint64_t starttime = get_sys_clock();
 #if CC_ALG == MIXED_LOCK || CC_ALG == SNAPPER
     if((msg->rtype != CL_QRY && msg->rtype != CL_QRY_O) || msg->algo == CALVIN){
@@ -513,10 +533,77 @@ RC WorkerThread::run() {
       txn_man->register_thread(this);   
     }
 #endif
+#if CC_ALG == ARIA
+    else if (msg->rtype == CL_QRY) {
+      txn_man = get_transaction_manager(msg);
+
+#if CC_ALG == ARIA
+      if (txn_man->aria_phase != simulation->aria_phase) {
+        // printf("thd: %ld, txn: %ld runs twice\n", get_thd_id(), txn_man->get_txn_id());
+        work_queue.work_enqueue(get_thd_id(), msg, false, txn_man->aria_phase);
+        continue;
+      }
+#endif
+
+      txn_man->txn_stats.clear_short();
+      txn_man->txn_stats.msg_queue_time += msg->mq_time;
+      txn_man->txn_stats.msg_queue_time_short += msg->mq_time;
+      msg->mq_time = 0;
+      txn_man->txn_stats.work_queue_time += msg->wq_time;
+      txn_man->txn_stats.work_queue_time_short += msg->wq_time;
+      //txn_man->txn_stats.network_time += msg->ntwk_time;
+      msg->wq_time = 0;
+      txn_man->txn_stats.work_queue_cnt += 1;
+
+      if (txn_man->participants_cnt != 0) {
+        work_queue.work_enqueue(get_thd_id(), msg, true, txn_man->aria_phase);
+        continue;
+      }
+
+      ready_starttime = get_sys_clock();
+      bool ready = txn_man->unset_ready();
+      INC_STATS(get_thd_id(),worker_activate_txn_time,get_sys_clock() - ready_starttime);
+      if(!ready) {
+        work_queue.work_enqueue(get_thd_id(),msg,true,txn_man->aria_phase);
+        continue;
+      }
+      // printf("txn: %ld unset ready\n", txn_man->get_txn_id());
+      
+      txn_man->register_thread(this);
+    }
+#endif
 #ifdef FAKE_PROCESS
     fakeprocess(msg);
 #else
     process(msg);
+#endif
+#if CC_ALG == ARIA  
+    if (msg->rtype == CL_QRY) {
+      if (simulation->aria_phase != ARIA_COMMIT) {
+        work_queue.work_enqueue(get_thd_id(), msg, false, txn_man->aria_phase);
+      }
+
+      // if we processed all local transactions in this phase, go to next phase and reset the count
+      if (ATOM_ADD_FETCH(simulation->batch_process_count, 1) == g_aria_batch_size) {
+        bool isAriaCommit = simulation->aria_phase == ARIA_COMMIT;
+        bool success = ATOM_CAS(simulation->batch_process_count, g_aria_batch_size, 0);
+        assert(success);
+        if (!isAriaCommit) {
+          if (simulation->aria_phase == ARIA_RESERVATION || simulation->aria_phase == ARIA_CHECK) {
+            for (uint64_t i = 0; i < g_node_cnt; i++) {
+              if (i == g_node_id) continue;
+              msg_queue.enqueue(_thd_id, Message::create_message(ARIA_ACK), i);
+            }
+            while (simulation->barrier_count != g_node_cnt - 1 && !simulation->is_done()) {}
+            simulation->barrier_count = 0;
+            memset(simulation->barriers, 0, sizeof(uint64_t) * g_node_cnt);
+            simulation->next_aria_phase();
+          } else {
+            simulation->next_aria_phase();
+          }
+        }
+      }
+    }
 #endif
     // process(msg);  /// DA
     ready_starttime = get_sys_clock();
@@ -532,10 +619,12 @@ RC WorkerThread::run() {
 #if CC_ALG == MIXED_LOCK || CC_ALG == SNAPPER
   if (msg->algo == CALVIN) {
   } else {
+#elif CC_ALG == ARIA
+  if (msg->rtype != CL_QRY) {
 #endif
     msg->release();
     delete msg;
-#if CC_ALG == MIXED_LOCK || CC_ALG == SNAPPER
+#if CC_ALG == MIXED_LOCK || CC_ALG == SNAPPER || CC_ALG == ARIA
   }
 #endif
 #endif
@@ -570,7 +659,7 @@ RC WorkerThread::process_rfin(Message * msg) {
   //if(!txn_man->query->readonly() || CC_ALG == OCC)
   if (!((FinishMessage*)msg)->readonly || CC_ALG == MAAT || CC_ALG == OCC || CC_ALG == TICTOC ||
        CC_ALG == BOCC || CC_ALG == SSI || CC_ALG == DLI_BASE ||
-       CC_ALG == DLI_OCC || CC_ALG == SILO || CC_ALG == MIXED_LOCK || CC_ALG == SNAPPER) {
+       CC_ALG == DLI_OCC || CC_ALG == SILO || CC_ALG == MIXED_LOCK || CC_ALG == SNAPPER || CC_ALG == ARIA) {
     msg_queue.enqueue(get_thd_id(), Message::create_message(txn_man, RACK_FIN),
                       GET_NODE_ID(msg->get_txn_id()));
   }
@@ -634,6 +723,7 @@ RC WorkerThread::process_valid(Message * msg) {
   return rc;
 }
 
+#if CC_ALG != ARIA
 RC WorkerThread::process_rack_prep(Message * msg) {
   DEBUG("RPREP_ACK %ld\n",msg->get_txn_id());
 
@@ -747,6 +837,34 @@ RC WorkerThread::process_rack_prep(Message * msg) {
 
   return rc;
 }
+#else
+RC WorkerThread::process_rack_prep(Message * msg) {
+  DEBUG("RPREP_ACK %ld\n",msg->get_txn_id());
+
+  RC rc = RCOK;
+  txn_man->participants_cnt--;
+  assert(txn_man->participants_cnt >= 0);
+  
+  // If the transaction is already abort, just return
+  if (txn_man->txn->rc == Abort) {
+    return Abort;
+  }
+
+  AckMessage * ack = (AckMessage *)msg;
+  if (ack->raw == true) {
+    txn_man->raw = true;
+  }
+  if (ack->war == true) {
+    txn_man->war = true;
+  }
+
+  if (ack->rc == Abort || (txn_man->raw && txn_man->war)) {
+    txn_man->txn->rc = Abort;
+    rc = Abort;
+  }
+  return rc;
+}
+#endif
 
 RC WorkerThread::process_rack_rfin(Message * msg) {
   DEBUG("RFIN_ACK %ld\n",msg->get_txn_id());
@@ -760,6 +878,9 @@ RC WorkerThread::process_rack_rfin(Message * msg) {
   // Done waiting
   txn_man->txn_stats.twopc_time += get_sys_clock() - txn_man->txn_stats.wait_starttime;
 
+#if CC_ALG == ARIA
+  Message * message = Message::create_message(txn_man, ARIA_ACK);
+#endif
   if(txn_man->get_rc() == RCOK) {
     INC_STATS(get_thd_id(), trans_commit_network, get_sys_clock() - txn_man->txn_stats.trans_commit_network_start_time);
     //txn_man->commit();
@@ -775,9 +896,13 @@ RC WorkerThread::process_rack_rfin(Message * msg) {
     //txn_man->abort();
     abort();
   }
+#if CC_ALG == ARIA
+  work_queue.sequencer_enqueue(get_thd_id(),message);
+#endif
   return rc;
 }
 
+#if CC_ALG != ARIA
 RC WorkerThread::process_rqry_rsp(Message * msg) {
   DEBUG("RQRY_RSP %ld\n",msg->get_txn_id());
   assert(IS_LOCAL(msg->get_txn_id()));
@@ -800,7 +925,29 @@ RC WorkerThread::process_rqry_rsp(Message * msg) {
   check_if_done(rc);
   return rc;
 }
+#else
+RC WorkerThread::process_rqry_rsp(Message * msg) {
+  RC rc = RCOK;
+  DEBUG("RQRY_RSP %ld\n",msg->get_txn_id());
+  assert(IS_LOCAL(msg->get_txn_id()));
+  if (txn_man->participants_cnt == 1) {
+    INC_STATS(get_thd_id(), trans_process_network, get_sys_clock() - txn_man->txn_stats.trans_process_network_start_time);
+  }
+  txn_man->txn_stats.remote_wait_time += get_sys_clock() - txn_man->txn_stats.wait_starttime;
 
+  QueryResponseMessage * resp = (QueryResponseMessage *)msg;
+  if (resp->rc == Abort) {
+    txn_man->txn->rc = Abort;
+    rc = Abort;
+  }
+
+  txn_man->participants_cnt--;
+  assert(txn_man->participants_cnt >= 0);
+  return rc;
+}
+#endif
+
+#if CC_ALG != ARIA
 RC WorkerThread::process_rqry(Message * msg) {
   DEBUG("RQRY %ld\n",msg->get_txn_id());
 #if ONE_NODE_RECIEVE == 1 && defined(NO_REMOTE) && LESS_DIS_NUM == 10
@@ -843,6 +990,18 @@ RC WorkerThread::process_rqry(Message * msg) {
   }
   return rc;
 }
+#else
+RC WorkerThread::process_rqry(Message * msg) {
+  DEBUG("RQRY %ld\n",msg->get_txn_id());
+  assert(!IS_LOCAL(msg->get_txn_id()));
+  RC rc = RCOK;
+  msg->copy_to_txn(txn_man);
+  QueryMessage * ycsb_query = (QueryMessage * ) msg;
+  rc = txn_man->process_aria_remote(ycsb_query->aria_phase);
+  msg_queue.enqueue(get_thd_id(),Message::create_message(txn_man,RQRY_RSP),txn_man->return_id);
+  return rc;
+}
+#endif
 
 #if CC_ALG != SNAPPER
 RC WorkerThread::process_rqry_cont(Message * msg) {
@@ -919,6 +1078,7 @@ RC WorkerThread::process_rtxn_cont(Message * msg) {
 }
 #endif
 
+#if CC_ALG != ARIA
 RC WorkerThread::process_rprepare(Message * msg) {
   DEBUG("RPREP %ld\n",msg->get_txn_id());
     RC rc = RCOK;
@@ -960,6 +1120,18 @@ RC WorkerThread::process_rprepare(Message * msg) {
 
     return rc;
 }
+#else
+RC WorkerThread::process_rprepare(Message* msg) {
+  DEBUG("RPREP %ld\n",msg->get_txn_id());
+  RC rc = RCOK;
+
+  rc = txn_man->process_aria_remote(ARIA_CHECK);
+  msg_queue.enqueue(get_thd_id(),Message::create_message(txn_man,RACK_PREP),msg->return_node_id);
+
+  return rc;
+}
+#endif
+
 
 uint64_t WorkerThread::get_next_txn_id() {
   uint64_t txn_id =
@@ -1223,6 +1395,44 @@ RC WorkerThread::process_calvin_rtxn(Message * msg) {
   }
   return RCOK;
 }
+
+#if CC_ALG == ARIA
+RC WorkerThread::process_aria_rtxn(Message * msg) {
+  DEBUG("START %ld %f %lu\n", txn_man->get_txn_id(),
+        simulation->seconds_from_start(get_sys_clock()), txn_man->txn_stats.starttime);
+  if (simulation->aria_phase == ARIA_READ && txn_man->txn_stats.abort_cnt == 0) {
+    // printf("txn: %ld copy msg to txn\n", txn_man->get_txn_id());
+    msg->copy_to_txn(txn_man);
+    assert(ISSERVERN(txn_man->return_id));
+  }
+  txn_man->txn_stats.local_wait_time += get_sys_clock() - txn_man->txn_stats.wait_starttime;
+  // Execute
+  RC rc = txn_man->run_aria_txn();
+  if (simulation->aria_phase == ARIA_COMMIT) {
+    if (rc != WAIT_REM) {
+      work_queue.sequencer_enqueue(get_thd_id(),Message::create_message(txn_man, ARIA_ACK));
+      if (txn_man->get_rc() == Abort) {
+        abort();
+      } else {
+        commit();
+      }
+    }
+  }
+  return RCOK;
+}
+
+RC WorkerThread::process_aria_ack(Message * msg) {
+  if (simulation->barriers[msg->get_return_id()]) {
+    work_queue.enqueue(_thd_id, msg, false);
+  } else {
+    simulation->barriers[msg->get_return_id()]++;
+    simulation->barrier_count++;
+    msg->release();
+    delete msg;
+  }
+  return RCOK;
+}
+#endif
 
 bool WorkerThread::is_cc_new_timestamp() {
   return (CC_ALG == MVCC || CC_ALG == TIMESTAMP || CC_ALG == DTA || CC_ALG == WOOKONG);

@@ -17,6 +17,7 @@
 #include "global.h"
 #include "helper.h"
 #include "sim_manager.h"
+#include "mem_alloc.h"
 
 void SimManager::init() {
 	sim_done = false;
@@ -30,6 +31,11 @@ void SimManager::init() {
 	worker_epoch = 1;
 	seq_epoch = 0;
 	rsp_cnt = g_total_node_cnt - 1;
+	aria_phase = ARIA_INIT;
+	batch_process_count = 0;
+	barrier_count = 0;
+	barriers = (bool *) mem_allocator.alloc(sizeof(bool) * g_node_cnt);
+	memset(barriers, 0, sizeof(bool) * g_node_cnt);
 
 #if TIME_ENABLE
 	run_starttime = get_sys_clock();
@@ -140,4 +146,8 @@ void SimManager::next_worker_epoch() {
 
 double SimManager::seconds_from_start(uint64_t time) {
 	return (double)(time - run_starttime) / BILLION;
+}
+
+void SimManager::next_aria_phase() {
+	aria_phase = (ARIA_PHASE)((aria_phase + 1) % 5);
 }

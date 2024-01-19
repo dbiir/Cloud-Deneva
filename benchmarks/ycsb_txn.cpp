@@ -214,6 +214,85 @@ RC YCSBTxnManager::send_remote_request() {
   return WAIT_REM;
 }
 
+#if CC_ALG == ARIA
+RC YCSBTxnManager::send_remote_read_requests() {
+  for (uint64_t i = 0; i < g_node_cnt; i++) {
+    if (i == g_node_id) continue;
+    if (read_set[i].size() == 0) continue;
+    next_send_node = i;
+    YCSBQueryMessage * msg = (YCSBQueryMessage*) Message::create_message(this,RQRY);
+    // printf("txn: %ld send remote read to %ld\n", txn->txn_id, i);
+    msg->aria_phase = ARIA_READ;
+    msg_queue.enqueue(get_thd_id(),msg,i);
+    participants_cnt++;
+  }
+  txn_stats.trans_process_network_start_time = get_sys_clock();
+  return participants_cnt == 0? RCOK : WAIT_REM;
+}
+
+RC YCSBTxnManager::send_remote_write_requests() {
+  for (uint64_t i = 0; i < g_node_cnt; i++) {
+    if (i == g_node_id) continue;
+    if (read_set[i].size() == 0 && write_set[i].size() == 0) continue;
+    next_send_node = i;
+    YCSBQueryMessage * msg = (YCSBQueryMessage*) Message::create_message(this,RQRY);
+    // printf("txn: %ld send remote write to %ld\n", txn->txn_id, i);
+    msg->aria_phase = ARIA_RESERVATION;
+    msg_queue.enqueue(get_thd_id(),msg,i);
+    participants_cnt++;
+  }
+  txn_stats.trans_process_network_start_time = get_sys_clock();
+  return participants_cnt == 0? RCOK : WAIT_REM;
+}
+
+RC YCSBTxnManager::process_aria_remote(ARIA_PHASE aria_phase) {
+  RC rc = RCOK;
+  YCSBQuery * ycsb_query = (YCSBQuery*) query;
+  switch (aria_phase)
+  {
+  case ARIA_READ:
+    for (uint64_t i = 0; i < ycsb_query->requests.size(); i++) {
+      ycsb_request * request = ycsb_query->requests[i];
+      rc = run_ycsb_0(request,row);
+      assert(rc == RCOK);
+      rc = run_ycsb_1(request->acctype,row);
+      assert(rc == RCOK);
+    }
+    // printf("txn: %ld remote read rc: %d\n", txn->txn_id, rc);
+    break;
+  case ARIA_RESERVATION:
+    for (uint64_t i = 0; i < ycsb_query->requests.size(); i++) {
+      if (ycsb_query->requests[i]->acctype == WR) {
+        ycsb_request * request = ycsb_query->requests[i];
+        rc = run_ycsb_0(request,row);
+        assert(rc == RCOK);
+        rc = run_ycsb_1(request->acctype,row);
+        assert(rc == RCOK);
+      }
+    }
+    rc = reserve();
+    // printf("txn: %ld remote reserve rc: %d\n", txn->txn_id, rc);
+    if (rc == Abort) {
+      txn->rc = Abort;
+    }
+    break;
+  case ARIA_CHECK:
+    assert(txn->rc != Abort);
+    rc = check();
+    if (rc == Abort) {
+      txn->rc = Abort;
+    }
+    // printf("txn: %ld remote check rc: %d\n", txn->txn_id, rc);
+    break;
+  default:
+    assert(false);
+    break;
+  }
+  return rc;
+}
+#endif
+
+#if CC_ALG != ARIA
 void YCSBTxnManager::copy_remote_requests(YCSBQueryMessage * msg) {
   YCSBQuery* ycsb_query = (YCSBQuery*) query;
   //msg->requests.init(ycsb_query->requests.size());
@@ -227,6 +306,19 @@ void YCSBTxnManager::copy_remote_requests(YCSBQueryMessage * msg) {
     YCSBQuery::copy_request_to_msg(ycsb_query,msg,next_record_id++);
   }
 }
+#else
+void YCSBTxnManager::copy_remote_requests(YCSBQueryMessage * msg) {
+  if (simulation->aria_phase == ARIA_READ) {
+    for (uint64_t i = 0; i < read_set[next_send_node].size(); i++) {
+      msg->requests.add(read_set[next_send_node][i]);
+    }
+  } else {
+    for (uint64_t i = 0; i < write_set[next_send_node].size(); i++) {
+      msg->requests.add(write_set[next_send_node][i]);
+    }
+  }
+}
+#endif
 
 RC YCSBTxnManager::run_txn_state() {
   YCSBQuery* ycsb_query = (YCSBQuery*) query;
@@ -387,6 +479,135 @@ RC YCSBTxnManager::run_calvin_txn() {
   txn_stats.wait_starttime = get_sys_clock();
   return rc;
 }
+
+#if CC_ALG == ARIA
+RC YCSBTxnManager::run_aria_txn() {
+  RC rc = RCOK;
+  uint64_t starttime = get_sys_clock();
+  YCSBQuery* ycsb_query = (YCSBQuery*) query;
+  DEBUG("(%ld,%ld) Run aria txn\n",txn->txn_id,txn->batch_id);
+  switch (simulation->aria_phase)
+  {
+  case ARIA_READ:
+    //analyze read/write set, do local read if key is equal to g_node_id or send remote read to remote node
+    assert(ycsb_query->requests.size() == g_req_per_query);
+    for (uint64_t i = 0; i < ycsb_query->requests.size(); i++) {
+      ycsb_request * request = ycsb_query->requests[i];
+      uint64_t target_node = GET_NODE_ID(_wl->key_to_part(request->key));
+      if (request->acctype == RD) {
+        if (target_node == g_node_id) {
+          rc = run_ycsb_0(request,row);
+          assert(rc == RCOK);
+          rc = run_ycsb_1(request->acctype,row);
+          assert(rc == RCOK);
+          read_set[target_node].emplace_back(request);
+        } else {
+          read_set[target_node].emplace_back(request);
+        }
+      } else {
+        write_set[target_node].emplace_back(request);
+      }
+      ycsb_query->partitions_touched.add_unique(target_node);
+    }
+
+    rc = send_remote_read_requests();
+    // if (rc == WAIT_REM) {
+    //   printf("txn: %ld wait for remote read\n", txn->txn_id);
+    // }
+    assert(rc == RCOK || rc == WAIT_REM);
+
+    assert(aria_phase == ARIA_READ);
+    aria_phase = (ARIA_PHASE) (aria_phase + 1);
+    assert(simulation->aria_phase == ARIA_READ);
+    // printf("txn: %ld read phase rc: %d\n", txn->txn_id, rc);
+
+    break;
+  case ARIA_RESERVATION:
+    // write to row copy and do reservation
+    for (uint64_t i = 0; i < write_set[g_node_id].size(); i++) {
+      ycsb_request * request = write_set[g_node_id][i];
+      rc = run_ycsb_0(request,row);
+      assert(rc == RCOK);
+      rc = run_ycsb_1(request->acctype,row);
+      assert(rc == RCOK);
+    }
+
+    rc = reserve();
+    if (rc == Abort) {
+      txn->rc = Abort;
+    }
+
+    rc = send_remote_write_requests();
+    // if (rc == WAIT_REM) {
+    //   printf("txn: %ld wait for remote write\n", txn->txn_id);
+    // }
+    assert(rc == RCOK || rc == Abort || rc == WAIT_REM);
+
+    assert(aria_phase == ARIA_RESERVATION);
+    aria_phase = (ARIA_PHASE) (aria_phase + 1);
+    assert(simulation->aria_phase == ARIA_RESERVATION);
+    // printf("txn: %ld reserve phase rc: %d\n", txn->txn_id, rc);
+
+// #if true
+//     if (rc == Abort) {
+//       abort();
+//     } else if (rc == RCOK) {
+//       commit();
+//     }
+// #endif
+
+    break;
+  case ARIA_CHECK:
+    // If we already known that txn should be aborted, do nothing in this phase, otherwise, check if the txn should be aborted
+    if (txn->rc == Abort) {
+    } else {
+      //send check request to all participants like 2PC
+      send_prepare_messages();
+
+      rc = check();
+      if (rc == Abort) {
+        txn->rc = Abort;
+      }
+
+      if (rsp_cnt != 0) {
+        rc = WAIT_REM;
+      }
+    }
+
+    assert(aria_phase == ARIA_CHECK);
+    aria_phase = (ARIA_PHASE) (aria_phase + 1);
+    assert(simulation->aria_phase == ARIA_CHECK);
+    // printf("txn: %ld check phase rc: %d\n", txn->txn_id, rc);
+    break;
+  case ARIA_COMMIT:
+    send_finish_messages();
+
+    if (txn->rc == Abort) {
+      abort();
+    } else {
+      commit();
+    }
+
+    if (rsp_cnt != 0) {
+      rc = WAIT_REM;
+    }
+
+    assert(aria_phase == ARIA_COMMIT);
+    aria_phase = (ARIA_PHASE) (aria_phase + 1);
+    assert(simulation->aria_phase == ARIA_COMMIT);
+    // printf("txn: %ld commit phase rc: %d\n", txn->txn_id, rc);
+    break;
+  default:
+    break;
+  }
+  uint64_t curr_time = get_sys_clock();
+  txn_stats.process_time += curr_time - starttime;
+  txn_stats.process_time_short += curr_time - starttime;
+  txn_stats.wait_starttime = get_sys_clock();
+  INC_STATS(get_thd_id(),worker_activate_txn_time,curr_time - starttime);
+  return rc;
+}
+#endif
 
 RC YCSBTxnManager::run_ycsb() {
   RC rc = RCOK;

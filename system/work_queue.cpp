@@ -34,6 +34,12 @@ void QWorkQueue::init() {
 	seq_queue = new boost::lockfree::queue<work_queue_entry* > (0);
 	work_queue = new boost::lockfree::queue<work_queue_entry* > (0);
 	new_txn_queue = new boost::lockfree::queue<work_queue_entry* >(0);
+#if CC_ALG == ARIA
+	aria_read_queue = new boost::lockfree::queue<work_queue_entry* >(0);
+	aria_reserve_queue = new boost::lockfree::queue<work_queue_entry* >(0);
+	aria_check_queue = new boost::lockfree::queue<work_queue_entry* >(0);
+	aria_commit_queue = new boost::lockfree::queue<work_queue_entry* >(0);
+#endif
 	sched_queue = new boost::lockfree::queue<work_queue_entry* > * [g_node_cnt];
 	for ( uint64_t i = 0; i < g_node_cnt; i++) {
 		sched_queue[i] = new boost::lockfree::queue<work_queue_entry* > (0);
@@ -107,6 +113,166 @@ Message * QWorkQueue::sequencer_dequeue(uint64_t thd_id) {
 	return msg;
 
 }
+
+#if CC_ALG == ARIA
+Message* QWorkQueue::txn_dequeue(uint64_t thd_id) {
+	uint64_t starttime = get_sys_clock();
+	assert(CC_ALG == ARIA);
+	assert(ISSERVER || ISREPLICA);
+	Message * msg = NULL;
+	work_queue_entry * entry = NULL;
+	bool valid = false;
+
+	valid = new_txn_queue->pop(entry);
+	if(valid) {
+		msg = entry->msg;
+		assert(msg);
+		uint64_t queue_time = get_sys_clock() - entry->starttime;
+		INC_STATS(thd_id,work_queue_wait_time,queue_time);
+		INC_STATS(thd_id,work_queue_cnt,1);
+		statqueue(thd_id, entry);
+		if(msg->rtype == CL_QRY || msg->rtype == CL_QRY_O) {
+			sem_wait(&_semaphore);
+			txn_queue_size --;
+			txn_dequeue_size ++;
+			sem_post(&_semaphore);
+			INC_STATS(thd_id,work_queue_new_wait_time,queue_time);
+			INC_STATS(thd_id,work_queue_new_cnt,1);
+		} else {
+			assert(false);
+		}
+		msg->wq_time = queue_time;
+		DEBUG("Work Dequeue (%ld,%ld)\n",entry->txn_id,entry->batch_id);
+		DEBUG_M("QWorkQueue::dequeue work_queue_entry free\n");
+		mem_allocator.free(entry,sizeof(work_queue_entry));
+		INC_STATS(thd_id,work_queue_dequeue_time,get_sys_clock() - starttime);
+	}
+	return msg;
+}
+
+void QWorkQueue::work_enqueue(uint64_t thd_id, Message* msg, bool not_ready, ARIA_PHASE phase) {
+	uint64_t starttime = get_sys_clock();
+	assert(CC_ALG == ARIA);
+	assert(msg);
+	DEBUG_M("QWorkQueue::enqueue work_queue_entry alloc\n");
+	work_queue_entry * entry = (work_queue_entry*)mem_allocator.align_alloc(sizeof(work_queue_entry));
+	entry->msg = msg;
+	entry->rtype = msg->rtype;
+	entry->txn_id = msg->txn_id;
+	entry->batch_id = msg->batch_id;
+	entry->starttime = get_sys_clock();
+	assert(ISSERVER || ISREPLICA);
+	DEBUG("Work Enqueue (%ld,%ld) %d\n",entry->txn_id,entry->batch_id,entry->rtype);
+
+	assert(msg->rtype == CL_QRY);
+
+	if(not_ready) {
+		INC_STATS(thd_id,work_queue_conflict_cnt,1);
+	}
+	switch (phase) {
+	case ARIA_READ:
+		// printf("thd_id: %ld add txn: %ld to read queue\n", thd_id, msg->txn_id);
+		while (!aria_read_queue->push(entry) && !simulation->is_done()) {}
+		break;
+	case ARIA_RESERVATION:
+		// printf("thd_id: %ld add txn: %ld to reserve queue\n", thd_id, msg->txn_id);
+		while (!aria_reserve_queue->push(entry) && !simulation->is_done()) {}
+		break;
+	case ARIA_CHECK:
+		// printf("thd_id: %ld add txn: %ld to check queue\n", thd_id, msg->txn_id);
+		while (!aria_check_queue->push(entry) && !simulation->is_done()) {}
+		break;
+	case ARIA_COMMIT:
+		// printf("thd_id: %ld add txn: %ld to commit queue\n", thd_id, msg->txn_id);
+		while (!aria_commit_queue->push(entry) && !simulation->is_done()) {}
+		break;
+	default:
+		assert(false);
+		break;
+	}
+	sem_wait(&_semaphore);
+	work_queue_size ++;
+	work_enqueue_size ++;
+	sem_post(&_semaphore);
+
+	INC_STATS(thd_id,work_queue_enqueue_time,get_sys_clock() - starttime);
+	INC_STATS(thd_id,work_queue_enq_cnt,1);
+	INC_STATS(thd_id,trans_work_queue_item_total,txn_queue_size+work_queue_size);
+}
+
+Message* QWorkQueue::work_dequeue(uint64_t thd_id) {
+	uint64_t starttime = get_sys_clock();
+	assert(CC_ALG == ARIA);
+	assert(ISSERVER || ISREPLICA);
+	Message * msg = NULL;
+	work_queue_entry * entry = NULL;
+	bool valid = false;
+
+	valid = work_queue->pop(entry);
+	if (!valid) {
+		switch (simulation->aria_phase)
+		{
+		case ARIA_READ:
+			valid = aria_read_queue->pop(entry);
+			if (valid) {
+				// printf("thd_id: %ld pop txn: %ld from read queue\n", thd_id, entry->msg->txn_id);
+			}
+			break;
+		case ARIA_RESERVATION:
+			valid = aria_reserve_queue->pop(entry);
+			if (valid) {
+				// printf("thd_id: %ld pop txn: %ld from reserve queue\n", thd_id, entry->msg->txn_id);
+			}
+			break;
+		case ARIA_CHECK:
+			valid = aria_check_queue->pop(entry);
+			if (valid) {
+				// printf("thd_id: %ld pop txn: %ld from check queue\n", thd_id, entry->msg->txn_id);
+			}
+			break;
+		case ARIA_COMMIT:
+			valid = aria_commit_queue->pop(entry);
+			if (valid) {
+				// printf("thd_id: %ld pop txn: %ld from commit queue\n", thd_id, entry->msg->txn_id);
+			}
+			break;
+		default:
+			break;
+		}
+	}
+
+	if(valid) {
+		msg = entry->msg;
+		assert(msg);
+		uint64_t queue_time = get_sys_clock() - entry->starttime;
+		INC_STATS(thd_id,work_queue_wait_time,queue_time);
+		INC_STATS(thd_id,work_queue_cnt,1);
+		statqueue(thd_id, entry);
+		if(msg->rtype == CL_QRY || msg->rtype == CL_QRY_O) {
+			sem_wait(&_semaphore);
+			work_queue_size ++;
+			work_enqueue_size ++;
+			sem_post(&_semaphore);
+			INC_STATS(thd_id,work_queue_new_wait_time,queue_time);
+			INC_STATS(thd_id,work_queue_new_cnt,1);
+		} else {
+			// printf("recieve msg type: %d\n", msg->rtype);
+			sem_wait(&_semaphore);
+			work_queue_size ++;
+			work_enqueue_size ++;
+			sem_post(&_semaphore);
+			INC_STATS(thd_id,work_queue_old_wait_time,queue_time);
+			INC_STATS(thd_id,work_queue_old_cnt,1);
+		}
+		msg->wq_time = queue_time;
+		DEBUG("Work Dequeue (%ld,%ld)\n",entry->txn_id,entry->batch_id);
+		DEBUG_M("QWorkQueue::dequeue work_queue_entry free\n");
+		mem_allocator.free(entry,sizeof(work_queue_entry));
+		INC_STATS(thd_id,work_queue_dequeue_time,get_sys_clock() - starttime);
+	}
+	return msg;
+}
+#endif
 
 void QWorkQueue::sched_enqueue(uint64_t thd_id, Message * msg) {
 	assert(CC_ALG == CALVIN || CC_ALG == MIXED_LOCK || CC_ALG == SNAPPER);

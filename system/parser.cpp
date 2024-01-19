@@ -197,6 +197,9 @@ void parser(int argc, char * argv[]) {
   g_total_thread_cnt += 3; // sequencer + scheduler thread + confilict stat thread
 #elif CC_ALG == SNAPPER
   g_total_thread_cnt += 3; // sequencer + scheduler thread + snapper check thread
+#elif CC_ALG == ARIA
+  g_total_thread_cnt += 1; // sequencer thread
+  g_total_thread_cnt -= 1; // abort thread
 #endif
   g_total_client_thread_cnt =
       g_client_thread_cnt + g_client_rem_thread_cnt + g_client_send_thread_cnt + g_client_dynamic_thread_cnt;

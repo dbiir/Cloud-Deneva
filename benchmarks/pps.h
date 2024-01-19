@@ -116,6 +116,9 @@ public:
 	RC run_txn();
 	RC run_txn_post_wait();
 	RC run_calvin_txn();
+#if CC_ALG == ARIA
+  RC run_aria_txn() {return RCOK;}
+#endif
   RC run_pps_phase2();
   RC run_pps_phase5();
 	PPSRemTxnType state;
@@ -132,6 +135,11 @@ private:
   bool is_done();
   bool is_local_item(uint64_t idx);
   RC send_remote_request();
+#if CC_ALG == ARIA
+  RC send_remote_read_requests() {return RCOK;}
+  RC send_remote_write_requests() {return RCOK;}
+  RC process_aria_remote(ARIA_PHASE aria_phase) {return RCOK;}
+#endif
 
 inline void getThreeFields(row_t *& r_local);
 inline void getAllFields(row_t *& r_local);

@@ -47,6 +47,9 @@ class DATxnManager : public TxnManager {
   RC run_txn();
   RC run_txn_post_wait();
   RC run_calvin_txn();
+#if CC_ALG == ARIA
+  RC run_aria_txn() {return RCOK;}
+#endif
 
   void copy_remote_items(DAQueryMessage* msg);
 
@@ -60,6 +63,11 @@ class DATxnManager : public TxnManager {
   bool is_done();
   bool is_local_item(uint64_t idx);
   RC send_remote_request() {return RCOK;}
+#if CC_ALG == ARIA
+  RC send_remote_read_requests() {return RCOK;}
+  RC send_remote_write_requests() {return RCOK;}
+  RC process_aria_remote(ARIA_PHASE aria_phase) {return RCOK;}
+#endif
   RC run_delivery(DAQuery* query);
 };
 #endif

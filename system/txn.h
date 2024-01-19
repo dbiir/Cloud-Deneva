@@ -162,6 +162,10 @@ public:
 	virtual RC      run_txn() = 0;
 	virtual RC      run_txn_post_wait() = 0;
 	virtual RC      run_calvin_txn() = 0;
+#if CC_ALG == ARIA
+	virtual RC		run_aria_txn() = 0;
+	virtual RC		process_aria_remote(ARIA_PHASE aria_phase) = 0;
+#endif
 	virtual RC      acquire_locks() = 0;
 	virtual RC 		send_remote_request() = 0;
 #if CC_ALG == SNAPPER
@@ -231,6 +235,18 @@ public:
 	set<uint64_t> dependBy;
 	bool wait_for_locks_ready;
 	uint64_t last_lock_ts;
+#endif
+
+#if CC_ALG == ARIA
+	vector<vector<ycsb_request *>> read_set;
+	vector<vector<ycsb_request *>> write_set;
+	bool w_loc;
+	bool c_w_loc;
+	bool ol_supply_w_all_loc;
+	uint64_t participants_cnt;
+	bool raw;
+	bool war;
+	ARIA_PHASE aria_phase;
 #endif
 
 #if CC_ALG == SILO
@@ -370,6 +386,11 @@ protected:
 	RC				validate_snapper();
 #endif
 
+#if CC_ALG == ARIA
+	RC				reserve();
+	RC				check();
+	RC 				finish(RC rc);
+#endif
 };
 
 #endif

@@ -164,6 +164,7 @@ Message * Message::create_message(RemReqType rtype) {
       msg = new LogFlushedMessage;
       break;
     case CALVIN_ACK:
+    case ARIA_ACK:
     case RACK_PREP:
     case RACK_FIN:
       msg = new AckMessage;
@@ -258,7 +259,7 @@ uint64_t Message::mget_size() {
 void Message::mcopy_from_txn(TxnManager * txn) {
   //rtype = query->rtype;
   txn_id = txn->get_txn_id();
-#if CC_ALG == CALVIN
+#if CC_ALG == CALVIN || CC_ALG == ARIA
   batch_id = txn->get_batch_id();
 #elif CC_ALG == MIXED_LOCK
   batch_id = txn->get_batch_id();
@@ -395,6 +396,7 @@ void Message::release_message(Message * msg) {
       break;
                       }
     case CALVIN_ACK:
+    case ARIA_ACK:
     case RACK_PREP:
     case RACK_FIN: {
       AckMessage * m_msg = (AckMessage*)msg;
@@ -473,6 +475,9 @@ uint64_t QueryMessage::get_size() {
     CC_ALG == DLI_DTA || CC_ALG == DLI_DTA2 || CC_ALG == DLI_DTA3 || CC_ALG == DLI_MVCC
   size += sizeof(start_ts);
 #endif
+#if CC_ALG == ARIA
+  size += sizeof(aria_phase);
+#endif
   size += sizeof(bool);
   return size;
 }
@@ -524,6 +529,9 @@ void QueryMessage::copy_from_buf(char * buf) {
     CC_ALG == DLI_DTA || CC_ALG == DLI_DTA2 || CC_ALG == DLI_DTA3 || CC_ALG == DLI_MVCC
  COPY_VAL(start_ts,buf,ptr);
 #endif
+#if CC_ALG == ARIA
+  COPY_VAL(aria_phase,buf,ptr);
+#endif
   COPY_VAL(isDeterministicAbort, buf, ptr);
 }
 
@@ -539,6 +547,9 @@ void QueryMessage::copy_to_buf(char * buf) {
     CC_ALG == DLI_BASE || CC_ALG == DLI_OCC || CC_ALG == DLI_MVCC_OCC || \
     CC_ALG == DLI_DTA || CC_ALG == DLI_DTA2 || CC_ALG == DLI_DTA3 || CC_ALG == DLI_MVCC
  COPY_BUF(buf,start_ts,ptr);
+#endif
+#if CC_ALG == ARIA
+  COPY_BUF(buf,aria_phase,ptr);
 #endif
   COPY_BUF(buf, isDeterministicAbort, ptr);
 }
@@ -1293,6 +1304,10 @@ uint64_t AckMessage::get_size() {
 #if CC_ALG == MIXED_LOCK
   size += sizeof(bool);
 #endif
+#if CC_ALG == ARIA
+  size += sizeof(bool);
+  size += sizeof(bool);
+#endif
 #if WORKLOAD == PPS && CC_ALG == CALVIN
   size += sizeof(size_t);
   size += sizeof(uint64_t) * part_keys.size();
@@ -1335,6 +1350,10 @@ void AckMessage::copy_from_txn(TxnManager * txn) {
 #if CC_ALG == MIXED_LOCK
   isCommit = !txn->aborted;
 #endif
+#if CC_ALG == ARIA
+  raw = txn->raw;
+  war = txn->war;
+#endif
 #if CC_ALG == SNAPPER
   // what to do with txn's dependon and dependby? potential memory leak
   dependOn = txn->dependOn;
@@ -1375,6 +1394,10 @@ void AckMessage::copy_from_buf(char * buf) {
 #endif
 #if CC_ALG == MIXED_LOCK
   COPY_VAL(isCommit,buf,ptr);
+#endif
+#if CC_ALG == ARIA
+  COPY_VAL(raw,buf,ptr);
+  COPY_VAL(war,buf,ptr);
 #endif
 #if CC_ALG == SNAPPER
   size_t size;
@@ -1418,6 +1441,10 @@ void AckMessage::copy_to_buf(char * buf) {
 #endif
 #if CC_ALG == MIXED_LOCK
   COPY_BUF(buf,isCommit,ptr);
+#endif
+#if CC_ALG == ARIA
+  COPY_BUF(buf,raw,ptr);
+  COPY_BUF(buf,war,ptr);
 #endif
 #if CC_ALG == SNAPPER
   size_t size = dependOn.size();
@@ -1812,7 +1839,11 @@ void TPCCQueryMessage::copy_from_txn(TxnManager * txn) {
   // new order
   //items.copy(tpcc_query->items);
   if(txn_type == TPCC_NEW_ORDER) {
+#if CC_ALG == ARIA
+    items.copy(tpcc_query->items);
+#else
     ((TPCCTxnManager*)txn)->copy_remote_items(this);
+#endif
     rbk = tpcc_query->rbk;
     remote = tpcc_query->remote;
     ol_cnt = tpcc_query->ol_cnt;
@@ -1845,7 +1876,7 @@ void TPCCQueryMessage::copy_to_txn(TxnManager * txn) {
 
   // new order
   if(txn_type == TPCC_NEW_ORDER) {
-#if CC_ALG==TICTOC
+#if CC_ALG==TICTOC || CC_ALG == ARIA
     tpcc_query->items.clear();
 #endif
     tpcc_query->items.append(items);

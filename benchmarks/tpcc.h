@@ -130,6 +130,9 @@ public:
 	RC run_txn();
 	RC run_txn_post_wait();
 	RC run_calvin_txn();
+#if CC_ALG == ARIA
+  RC run_aria_txn();
+#endif
   RC run_tpcc_phase2();
   RC run_tpcc_phase5();
 	TPCCRemTxnType state;
@@ -146,6 +149,11 @@ RC run_txn_state();
   bool is_done();
   bool is_local_item(uint64_t idx);
   RC send_remote_request();
+#if CC_ALG == ARIA
+  RC send_remote_read_requests();
+  RC send_remote_write_requests();
+  RC process_aria_remote(ARIA_PHASE aria_phase);
+#endif
 
   RC run_payment_0(uint64_t w_id, uint64_t d_id, uint64_t d_w_id, double h_amount,
                    row_t*& r_wh_local);

@@ -68,6 +68,9 @@ public:
   RC run_txn();
   RC run_txn_post_wait();
 	RC run_calvin_txn();
+#if CC_ALG == ARIA
+  RC run_aria_txn();
+#endif
   void copy_remote_requests(YCSBQueryMessage * msg);
 private:
   void next_ycsb_state();
@@ -78,11 +81,19 @@ private:
   bool is_done() ;
   bool is_local_request(uint64_t idx) ;
   RC send_remote_request() ;
+#if CC_ALG == ARIA
+  RC send_remote_read_requests();
+  RC send_remote_write_requests();
+  RC process_aria_remote(ARIA_PHASE aria_phase);
+#endif
 
   row_t * row;
 	YCSBWorkload * _wl;
 	YCSBRemTxnType state;
   uint64_t next_record_id;
+#if CC_ALG == ARIA
+  uint64_t next_send_node;
+#endif
 };
 
 #endif

@@ -388,6 +388,10 @@ void TxnManager::init(uint64_t thd_id, Workload * h_wl) {
 	last_lock_ts = 0;
 	algo = -1;
 #endif
+#if CC_ALG == ARIA
+	read_set.resize(g_node_cnt);
+	write_set.resize(g_node_cnt);
+#endif
 
 	registed_ = false;
 	txn_ready = true;
@@ -444,6 +448,19 @@ void TxnManager::reset() {
 	dependOn.clear();
 	dependBy.clear();
 	last_lock_ts = 0;
+#endif
+#if CC_ALG == ARIA
+	for (uint64_t i = 0; i < g_node_cnt; i++) {
+		read_set[i].clear();
+		write_set[i].clear();
+	}
+	w_loc = true;
+	c_w_loc = true;
+	ol_supply_w_all_loc = true;
+	participants_cnt = 0;
+	raw = false;
+	war = false;
+	aria_phase = ARIA_READ;
 #endif
 
 	assert(txn);
@@ -774,6 +791,9 @@ void TxnManager::send_prepare_messages() {
 	}
 		msg_queue.enqueue(get_thd_id(), Message::create_message(this, RPREPARE),
 											GET_NODE_ID(query->partitions_touched[i]));
+#if CC_ALG == ARIA
+		participants_cnt++;
+#endif
 	}
 }
 
@@ -1109,6 +1129,9 @@ void TxnManager::cleanup(RC rc) {
 	if (algo == SILO) {
 		finish(rc);
 	}
+#endif
+#if CC_ALG == ARIA
+	finish(rc);
 #endif
 #if CC_ALG == OCC && MODE == NORMAL_MODE
 	occ_man.finish(rc,this);

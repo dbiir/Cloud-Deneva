@@ -15,6 +15,8 @@
 */
 
 #include "abort_thread.h"
+#include "aria_sequencer.h"
+#include "aria_thread.h"
 #include "calvin_thread.h"
 #include "conflict_thread.h"
 #include "snapper_check_thread.h"
@@ -80,6 +82,9 @@ SnapperCheckThread * snapper_check_thd;
 CalvinLockThread * calvin_lock_thds;
 CalvinSequencerThread * calvin_seq_thds;
 ConflictThread * conflict_thds;
+#endif
+#if CC_ALG == ARIA
+AriaSequencerThread * aria_seq_thds;
 #endif
 
 // defined in parser.cpp
@@ -196,6 +201,12 @@ int main(int argc, char *argv[]) {
 	fflush(stdout);
 	txn_table.init();
 	printf("Done\n");
+#if CC_ALG == ARIA
+	printf("Initializing sequencer... ");
+	fflush(stdout);
+	aria_seq.init(m_wl);
+	printf("Done\n");
+#endif
 #if CC_ALG == CALVIN || CC_ALG == MIXED_LOCK || CC_ALG == SNAPPER
 	printf("Initializing sequencer... ");
 	fflush(stdout);
@@ -309,6 +320,10 @@ int main(int argc, char *argv[]) {
 #if CC_ALG == MIXED_LOCK
 		all_thd_cnt += 3; //sequencer + scheduler thread + conflict thread
 #endif
+#if CC_ALG == ARIA
+	all_thd_cnt += 1;	//sequencer thread
+	all_thd_cnt -= 1; 	//abort thread
+#endif
 
 
 	printf("%ld, %ld, %ld, %d \n", thd_cnt, rthd_cnt, sthd_cnt, g_abort_thread_cnt);
@@ -343,6 +358,9 @@ int main(int argc, char *argv[]) {
 	calvin_lock_thds = new CalvinLockThread[1];
 	calvin_seq_thds = new CalvinSequencerThread[1];
 	conflict_thds=new ConflictThread[1];
+#endif
+#if CC_ALG == ARIA
+	aria_seq_thds = new AriaSequencerThread[1];
 #endif
 	// query_queue should be the last one to be initialized!!!
 	// because it collects txn latency
@@ -434,7 +452,7 @@ int main(int argc, char *argv[]) {
 	}
 #endif
 
-#if CC_ALG != CALVIN
+#if CC_ALG != CALVIN && CC_ALG != ARIA
 	abort_thds[0].init(id,g_node_id,m_wl);
 	pthread_create(&p_thds[id++], NULL, run_thread, (void *)&abort_thds[0]);
 #endif
@@ -515,6 +533,17 @@ int main(int argc, char *argv[]) {
 #endif
 	conflict_thds[0].init(id,g_node_id,m_wl);
 	pthread_create(&p_thds[id++], &attr, run_thread, (void *)&conflict_thds[0]);
+#endif
+
+#if CC_ALG == ARIA
+#if SET_AFFINITY
+	CPU_ZERO(&cpus);
+	CPU_SET(cpu_cnt, &cpus);
+	pthread_attr_setaffinity_np(&attr, sizeof(cpu_set_t), &cpus);
+	cpu_cnt++;
+#endif
+	aria_seq_thds[0].init(id,g_node_id,m_wl);
+	pthread_create(&p_thds[id++], &attr, run_thread, (void *)&aria_seq_thds[0]);
 #endif
 
 	worker_num_thds[0].init(id,g_node_id,m_wl);

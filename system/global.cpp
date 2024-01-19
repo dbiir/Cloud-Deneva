@@ -55,6 +55,7 @@
 #include "key_xid.h"
 #include "rts_cache.h"
 #include "cc_selector.h"
+#include "aria_sequencer.h"
 
 #include <boost/lockfree/queue.hpp>
 #include "da_block_queue.h"
@@ -90,6 +91,9 @@ AbortQueue abort_queue;
 MessageQueue msg_queue;
 Client_txn client_man;
 Sequencer seq_man;
+#if CC_ALG == ARIA
+AriaSequencer aria_seq;
+#endif
 Logger logger;
 TimeTable time_table;
 DtaTimeTable dta_time_table;
@@ -240,6 +244,9 @@ std::vector<double> dy_write;
 std::vector<double> dy_skew;
 uint32_t g_dy_Nbatch;
 uint32_t g_dy_batch_id = 0;
+
+// ARIA
+UInt32 g_aria_batch_size = ARIA_BATCH_SIZE;
 
 // TICTOC
 uint32_t g_max_num_waits = MAX_NUM_WAITS;

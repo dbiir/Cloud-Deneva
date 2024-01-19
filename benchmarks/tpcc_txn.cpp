@@ -1222,6 +1222,304 @@ RC TPCCTxnManager::run_calvin_txn() {
 
 }
 
+#if CC_ALG == ARIA
+RC TPCCTxnManager::run_aria_txn() {
+	RC rc = RCOK;
+	uint64_t starttime = get_sys_clock();
+	TPCCQuery* tpcc_query = (TPCCQuery*) query;
+	DEBUG("(%ld,%ld) Run calvin txn\n",txn->txn_id,txn->batch_id);
+	uint64_t w_id = tpcc_query->w_id;
+	uint64_t d_id = tpcc_query->d_id;
+	uint64_t c_id = tpcc_query->c_id;
+	uint64_t d_w_id = tpcc_query->d_w_id;
+	uint64_t c_w_id = tpcc_query->c_w_id;
+	uint64_t c_d_id = tpcc_query->c_d_id;
+	char * c_last = tpcc_query->c_last;
+	double h_amount = tpcc_query->h_amount;
+	bool by_last_name = tpcc_query->by_last_name;
+	bool remote = tpcc_query->remote;
+	uint64_t ol_cnt = tpcc_query->ol_cnt;
+	uint64_t o_entry_d = tpcc_query->o_entry_d;
+	switch (simulation->aria_phase)
+	{
+	case ARIA_READ:
+		if (tpcc_query->txn_type == TPCC_PAYMENT) {
+			uint64_t wh_node = GET_NODE_ID(wh_to_part(w_id));
+			if (wh_node != g_node_id) {
+				w_loc = false;
+			}
+			query->partitions_touched.add_unique(wh_node);
+			uint64_t c_node = GET_NODE_ID(wh_to_part(c_w_id));
+			if (c_node != g_node_id) {
+				c_w_loc = false;
+			}
+			query->partitions_touched.add_unique(c_node);
+			// if (!w_loc || !c_w_loc) {
+			// 	rc = send_remote_read_requests();
+			// }
+		} else if (tpcc_query->txn_type == TPCC_NEW_ORDER) {
+			uint64_t wh_node = GET_NODE_ID(wh_to_part(w_id));
+			if (wh_node == g_node_id) {
+				rc = new_order_0( w_id, d_id, c_id, remote, ol_cnt, o_entry_d, &tpcc_query->o_id, row);
+				rc = new_order_1( w_id, d_id, c_id, remote, ol_cnt, o_entry_d, &tpcc_query->o_id, row);
+				rc = new_order_2( w_id, d_id, c_id, remote, ol_cnt, o_entry_d, &tpcc_query->o_id, row);
+				rc = new_order_3( w_id, d_id, c_id, remote, ol_cnt, o_entry_d, &tpcc_query->o_id, row);
+				rc = new_order_4( w_id, d_id, c_id, remote, ol_cnt, o_entry_d, &tpcc_query->o_id, row);
+				tpcc_query->o_id = *(int64_t *) row->get_value(D_NEXT_O_ID);
+			} else {
+				w_loc = false;
+			}
+			query->partitions_touched.add_unique(wh_node);
+			for (uint64_t i = 0; i < tpcc_query->ol_cnt; i++) {
+				uint64_t ol_i_id = tpcc_query->items[i]->ol_i_id;
+				uint64_t ol_supply_w_id = tpcc_query->items[i]->ol_supply_w_id;
+				uint64_t ol_node = GET_NODE_ID(wh_to_part(ol_supply_w_id));
+				if (ol_node == g_node_id) {
+					rc = new_order_6(ol_i_id, row);
+					rc = new_order_7(ol_i_id, row);
+				} else {
+					ol_supply_w_all_loc = false;
+				}
+				query->partitions_touched.add_unique(ol_node);
+			}
+			if (!w_loc || !ol_supply_w_all_loc) {
+				rc = send_remote_read_requests();
+			}
+		} else {
+			assert(false);
+		}
+
+		assert(rc == RCOK || rc == WAIT_REM);
+
+		assert(aria_phase == ARIA_READ);
+		aria_phase = (ARIA_PHASE) (aria_phase + 1);
+		assert(simulation->aria_phase == ARIA_READ);
+		break;
+	case ARIA_RESERVATION:
+		if (tpcc_query->txn_type == TPCC_PAYMENT) {
+			if (w_loc) {
+				rc = run_payment_0(w_id, d_id, d_w_id, h_amount, row);
+				rc = run_payment_1(w_id, d_id, d_w_id, h_amount, row);
+				rc = run_payment_2(w_id, d_id, d_w_id, h_amount, row);
+				rc = run_payment_3(w_id, d_id, d_w_id, h_amount, row);
+			}
+			if (c_w_loc) {
+				rc = run_payment_4(w_id, d_id, c_id, c_w_id, c_d_id, c_last, h_amount, by_last_name, row);
+				rc = run_payment_5(w_id, d_id, c_id, c_w_id, c_d_id, c_last, h_amount, by_last_name, row);
+			}
+			if (!w_loc || !c_w_loc) {
+				rc = send_remote_write_requests();
+			}
+		} else if (tpcc_query->txn_type == TPCC_NEW_ORDER) {
+			if (w_loc) {
+				rc = new_order_5(w_id, d_id, c_id, remote, ol_cnt, o_entry_d, &tpcc_query->o_id, row);
+			}
+			for (uint64_t i = 0; i < tpcc_query->ol_cnt; i++) {
+				uint64_t ol_number = i;
+				uint64_t ol_i_id = tpcc_query->items[ol_number]->ol_i_id;
+				uint64_t ol_supply_w_id = tpcc_query->items[ol_number]->ol_supply_w_id;
+				uint64_t ol_quantity = tpcc_query->items[ol_number]->ol_quantity;
+				uint64_t ol_amount = tpcc_query->ol_amount;
+				uint64_t ol_node = GET_NODE_ID(wh_to_part(ol_supply_w_id));
+				if (ol_node == g_node_id) {
+					rc = new_order_8(w_id, d_id, remote, ol_i_id, ol_supply_w_id, ol_quantity, ol_number,
+													 tpcc_query->o_id, row);
+					rc = new_order_9(w_id, d_id, remote, ol_i_id, ol_supply_w_id, ol_quantity, ol_number,
+													 ol_amount, tpcc_query->o_id, row);
+				}
+			}
+
+			if (!w_loc || !ol_supply_w_all_loc) {
+				rc = send_remote_write_requests();
+			}
+		} else {
+			assert(false);
+		}
+
+		rc = reserve();
+		if (rc == Abort) {
+			txn->rc = Abort;
+		}
+
+		assert(rc == RCOK || rc == Abort || rc == WAIT_REM);
+
+		assert(aria_phase == ARIA_RESERVATION);
+		aria_phase = (ARIA_PHASE) (aria_phase + 1);
+		assert(simulation->aria_phase == ARIA_RESERVATION);
+		break;
+	case ARIA_CHECK:
+		if (txn->rc == Abort) {
+		} else {
+			send_prepare_messages();
+
+			rc = check();
+			if (rc == Abort) {
+				txn->rc = Abort;
+			}
+
+			if (rsp_cnt != 0) {
+				rc = WAIT_REM;
+			}
+		}
+
+		assert(aria_phase == ARIA_CHECK);
+		aria_phase = (ARIA_PHASE) (aria_phase + 1);
+		assert(simulation->aria_phase == ARIA_CHECK);
+		break;
+	case ARIA_COMMIT:
+		send_finish_messages();
+
+		if (txn->rc == Abort) {
+		abort();
+		} else {
+		commit();
+		}
+
+		if (rsp_cnt != 0) {
+		rc = WAIT_REM;
+		}
+
+		assert(aria_phase == ARIA_COMMIT);
+		aria_phase = (ARIA_PHASE) (aria_phase + 1);
+		assert(simulation->aria_phase == ARIA_COMMIT);
+		break;
+	default:
+		assert(false);
+	}
+	uint64_t curr_time = get_sys_clock();
+	txn_stats.process_time += curr_time - starttime;
+	txn_stats.process_time_short += curr_time - starttime;
+	txn_stats.wait_starttime = get_sys_clock();
+	INC_STATS(get_thd_id(),worker_activate_txn_time,curr_time - starttime);
+	return rc;
+}
+
+RC TPCCTxnManager::send_remote_read_requests() {
+	for (uint64_t i = 0; i < query->partitions_touched.size(); i++) {
+		uint64_t node = query->partitions_touched[i];
+		if (node == g_node_id) {
+			continue;
+		}
+		TPCCQueryMessage * msg = (TPCCQueryMessage *) Message::create_message(this, RQRY);
+		msg->aria_phase = ARIA_READ;
+		msg_queue.enqueue(get_thd_id(), msg, node);
+		participants_cnt++;
+	}
+	txn_stats.trans_process_network_start_time = get_sys_clock();
+  	return participants_cnt == 0? RCOK : WAIT_REM;
+}
+
+RC TPCCTxnManager::send_remote_write_requests() {
+	for (uint64_t i = 0; i < query->partitions_touched.size(); i++) {
+		uint64_t node = query->partitions_touched[i];
+		if (node == g_node_id) {
+			continue;
+		}
+		TPCCQueryMessage * msg = (TPCCQueryMessage *) Message::create_message(this, RQRY);
+		msg->aria_phase = ARIA_RESERVATION;
+		msg_queue.enqueue(get_thd_id(), msg, node);
+		participants_cnt++;
+	}
+	txn_stats.trans_process_network_start_time = get_sys_clock();
+  	return participants_cnt == 0? RCOK : WAIT_REM;
+}
+
+RC TPCCTxnManager::process_aria_remote(ARIA_PHASE aria_phase) {
+	RC rc = RCOK;
+	TPCCQuery* tpcc_query = (TPCCQuery*) query;
+	DEBUG("(%ld,%ld) Run calvin txn\n",txn->txn_id,txn->batch_id);
+	uint64_t w_id = tpcc_query->w_id;
+	uint64_t d_id = tpcc_query->d_id;
+	uint64_t c_id = tpcc_query->c_id;
+	uint64_t d_w_id = tpcc_query->d_w_id;
+	uint64_t c_w_id = tpcc_query->c_w_id;
+	uint64_t c_d_id = tpcc_query->c_d_id;
+	char * c_last = tpcc_query->c_last;
+	double h_amount = tpcc_query->h_amount;
+	bool by_last_name = tpcc_query->by_last_name;
+	bool remote = tpcc_query->remote;
+	uint64_t ol_cnt = tpcc_query->ol_cnt;
+	uint64_t o_entry_d = tpcc_query->o_entry_d;
+	switch (aria_phase)
+	{
+	case ARIA_READ:
+		if (tpcc_query->txn_type == TPCC_PAYMENT) {
+			assert(false);
+		} else if (tpcc_query->txn_type == TPCC_NEW_ORDER) {
+			uint64_t wh_node = GET_NODE_ID(wh_to_part(w_id));
+			if (wh_node == g_node_id) {
+				rc = new_order_0( w_id, d_id, c_id, remote, ol_cnt, o_entry_d, &tpcc_query->o_id, row);
+				rc = new_order_1( w_id, d_id, c_id, remote, ol_cnt, o_entry_d, &tpcc_query->o_id, row);
+				rc = new_order_2( w_id, d_id, c_id, remote, ol_cnt, o_entry_d, &tpcc_query->o_id, row);
+				rc = new_order_3( w_id, d_id, c_id, remote, ol_cnt, o_entry_d, &tpcc_query->o_id, row);
+				rc = new_order_4( w_id, d_id, c_id, remote, ol_cnt, o_entry_d, &tpcc_query->o_id, row);
+				tpcc_query->o_id = *(int64_t *) row->get_value(D_NEXT_O_ID);
+			}
+			for (uint64_t i = 0; i < tpcc_query->ol_cnt; i++) {
+				uint64_t ol_i_id = tpcc_query->items[i]->ol_i_id;
+				uint64_t ol_supply_w_id = tpcc_query->items[i]->ol_supply_w_id;
+				uint64_t ol_node = GET_NODE_ID(wh_to_part(ol_supply_w_id));
+				if (ol_node == g_node_id) {
+					rc = new_order_6(ol_i_id, row);
+					rc = new_order_7(ol_i_id, row);
+				}
+			}
+		}
+		break;
+	case ARIA_RESERVATION:
+		if (tpcc_query->txn_type == TPCC_PAYMENT) {
+			uint64_t wh_node = GET_NODE_ID(wh_to_part(w_id));
+			if (wh_node == g_node_id) {
+				rc = run_payment_0(w_id, d_id, d_w_id, h_amount, row);
+				rc = run_payment_1(w_id, d_id, d_w_id, h_amount, row);
+				rc = run_payment_2(w_id, d_id, d_w_id, h_amount, row);
+				rc = run_payment_3(w_id, d_id, d_w_id, h_amount, row);
+			}
+			uint64_t c_node = GET_NODE_ID(wh_to_part(c_w_id));
+			if (c_node == g_node_id) {
+				rc = run_payment_4(w_id, d_id, c_id, c_w_id, c_d_id, c_last, h_amount, by_last_name, row);
+				rc = run_payment_5(w_id, d_id, c_id, c_w_id, c_d_id, c_last, h_amount, by_last_name, row);
+			}
+		} else if (tpcc_query->txn_type == TPCC_NEW_ORDER) {
+			uint64_t wh_node = GET_NODE_ID(wh_to_part(w_id));
+			if (wh_node == g_node_id) {
+				rc = new_order_5(w_id, d_id, c_id, remote, ol_cnt, o_entry_d, &tpcc_query->o_id, row);
+			}
+			for (uint64_t i = 0; i < tpcc_query->ol_cnt; i++) {
+				uint64_t ol_number = i;
+				uint64_t ol_i_id = tpcc_query->items[ol_number]->ol_i_id;
+				uint64_t ol_supply_w_id = tpcc_query->items[ol_number]->ol_supply_w_id;
+				uint64_t ol_quantity = tpcc_query->items[ol_number]->ol_quantity;
+				uint64_t ol_amount = tpcc_query->ol_amount;
+				uint64_t ol_node = GET_NODE_ID(wh_to_part(ol_supply_w_id));
+				if (ol_node == g_node_id) {
+					rc = new_order_8(w_id, d_id, remote, ol_i_id, ol_supply_w_id, ol_quantity, ol_number,
+													 tpcc_query->o_id, row);
+					rc = new_order_9(w_id, d_id, remote, ol_i_id, ol_supply_w_id, ol_quantity, ol_number,
+													 ol_amount, tpcc_query->o_id, row);
+				}
+			}
+		}
+
+		rc = reserve();
+		if (rc == Abort) {
+			txn->rc = Abort;
+		}
+		break;
+	case ARIA_CHECK:
+		assert(txn->rc != Abort);
+		rc = check();
+		if (rc == Abort) {
+		txn->rc = Abort;
+		}
+		break;
+	default:
+		assert(false);
+		break;
+	}
+	return rc;
+}
+#endif
 
 RC TPCCTxnManager::run_tpcc_phase2() {
 	TPCCQuery* tpcc_query = (TPCCQuery*) query;

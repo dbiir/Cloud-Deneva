@@ -197,6 +197,10 @@ public:
 #if CC_ALG == MIXED_LOCK
   bool isCommit;
 #endif
+#if CC_ALG == ARIA
+  bool raw;
+  bool war;
+#endif
 #if CC_ALG == SNAPPER
   set<uint64_t> dependOn;
   set<uint64_t> dependBy;
@@ -437,6 +441,9 @@ public:
     CC_ALG == DLI_BASE || CC_ALG == DLI_OCC || CC_ALG == DLI_MVCC_OCC || \
     CC_ALG == DLI_DTA || CC_ALG == DLI_DTA2 || CC_ALG == DLI_DTA3 || CC_ALG == DLI_MVCC
   uint64_t start_ts;
+#endif
+#if CC_ALG == ARIA
+  ARIA_PHASE aria_phase;
 #endif
 #if MODE==QRY_ONLY_MODE
   uint64_t max_access;

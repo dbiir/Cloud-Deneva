@@ -48,6 +48,10 @@ public:
     RC process_rpass(Message * msg);
     RC process_rtxn(Message * msg);
     RC process_calvin_rtxn(Message * msg);
+#if CC_ALG == ARIA
+    RC process_aria_rtxn(Message * msg);
+    RC process_aria_ack(Message * msg);
+#endif
     RC process_rtxn_cont(Message * msg);
     RC process_req_valid(Message * msg);
     RC process_valid(Message * msg);

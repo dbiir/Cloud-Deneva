@@ -74,6 +74,11 @@ public:
   Message * sched_dequeue(uint64_t thd_id);
   void sequencer_enqueue(uint64_t thd_id, Message * msg);
   Message * sequencer_dequeue(uint64_t thd_id);
+#if CC_ALG == ARIA
+  Message * txn_dequeue(uint64_t thd_id);
+  void work_enqueue(uint64_t thd_id, Message * msg, bool not_ready, ARIA_PHASE phase);
+  Message * work_dequeue(uint64_t thd_id);
+#endif
 
   uint64_t get_cnt() {return get_wq_cnt() + get_rem_wq_cnt() + get_new_wq_cnt();}
   uint64_t get_wq_cnt() {return 0;}
@@ -114,6 +119,12 @@ private:
 #endif
   boost::lockfree::queue<work_queue_entry* > * seq_queue;
   boost::lockfree::queue<work_queue_entry* > ** sched_queue;
+#if CC_ALG == ARIA
+  boost::lockfree::queue<work_queue_entry* > * aria_read_queue;
+  boost::lockfree::queue<work_queue_entry* > * aria_reserve_queue;
+  boost::lockfree::queue<work_queue_entry* > * aria_check_queue;
+  boost::lockfree::queue<work_queue_entry* > * aria_commit_queue;
+#endif
 
   uint64_t sched_ptr;
   BaseQuery * last_sched_dq;

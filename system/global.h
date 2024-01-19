@@ -85,6 +85,7 @@ class MessageQueue;
 class Client_query_queue;
 class Client_txn;
 class Sequencer;
+class AriaSequencer;
 class Logger;
 class TimeTable;
 class InOutTable;
@@ -138,6 +139,7 @@ extern AbortQueue abort_queue;
 extern MessageQueue msg_queue;
 extern Client_txn client_man;
 extern Sequencer seq_man;
+extern AriaSequencer aria_seq;
 extern Logger logger;
 extern TimeTable time_table;
 extern DtaTimeTable dta_time_table;
@@ -300,6 +302,9 @@ extern std::vector<double> dy_skew;
 extern uint32_t g_dy_Nbatch;
 extern uint32_t g_dy_batch_id;
 
+// ARIA
+extern UInt32 g_aria_batch_size;
+
 // TICTOC
 extern uint32_t g_max_num_waits;
 
@@ -336,6 +341,7 @@ enum RemReqType {
     LOG_FLUSHED,
     CALVIN_ACK,
     CALVIN_ABORT,
+    ARIA_ACK,
     CONF_STAT,
     REQ_VALID,
     VALID,

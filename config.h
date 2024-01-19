@@ -218,6 +218,8 @@
 #define EXTREME_MODE false
 #define DETERMINISTIC_ABORT_MODE false
 #define DETERMINISTIC_ABORT_RATIO 0.2
+// [ARIA]
+#define ARIA_BATCH_SIZE 1000
 // [TICTOC]
 #define MAX_NUM_WAITS 4
 #define PRE_ABORT true
