@@ -435,6 +435,7 @@ enum PPSTxnType {
 #define CNULL 28
 #define MIXED_LOCK 29
 #define SNAPPER 30
+#define ARIA 31
 // TIMESTAMP allocation method.
 #define TS_MUTEX          1
 #define TS_CAS            2
