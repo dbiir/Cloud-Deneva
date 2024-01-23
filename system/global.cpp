@@ -173,18 +173,18 @@ UInt32 g_stats_per_interval_thread_cnt = STATS_EVERY_INTERVAL;
 UInt32 g_send_thread_cnt = SEND_THREAD_CNT;
 #if CC_ALG == CALVIN
 // sequencer + scheduler thread
-UInt32 g_total_thread_cnt = g_thread_cnt + g_rem_thread_cnt + g_send_thread_cnt + g_abort_thread_cnt + g_stats_per_interval_thread_cnt + g_logger_thread_cnt + 3;
+UInt32 g_total_thread_cnt = g_thread_cnt + g_rem_thread_cnt + g_send_thread_cnt + g_abort_thread_cnt + g_stats_per_interval_thread_cnt + g_logger_thread_cnt + 2;
 #elif CC_ALG == SNAPPER
 // sequencer + scheduler thread + snapper_check_thread
-UInt32 g_total_thread_cnt = g_thread_cnt + g_rem_thread_cnt + g_send_thread_cnt + g_abort_thread_cnt + g_stats_per_interval_thread_cnt + g_logger_thread_cnt + 4;
+UInt32 g_total_thread_cnt = g_thread_cnt + g_rem_thread_cnt + g_send_thread_cnt + g_abort_thread_cnt + g_stats_per_interval_thread_cnt + g_logger_thread_cnt + 3;
 #elif CC_ALG == HDCC
-UInt32 g_total_thread_cnt = g_thread_cnt + g_rem_thread_cnt + g_send_thread_cnt + g_abort_thread_cnt + g_stats_per_interval_thread_cnt + g_logger_thread_cnt + 4;
+UInt32 g_total_thread_cnt = g_thread_cnt + g_rem_thread_cnt + g_send_thread_cnt + g_abort_thread_cnt + g_stats_per_interval_thread_cnt + g_logger_thread_cnt + 3;
 #else
-UInt32 g_total_thread_cnt = g_thread_cnt + g_rem_thread_cnt + g_send_thread_cnt + g_abort_thread_cnt + g_stats_per_interval_thread_cnt + g_logger_thread_cnt + 1;
+UInt32 g_total_thread_cnt = g_thread_cnt + g_rem_thread_cnt + g_send_thread_cnt + g_abort_thread_cnt + g_stats_per_interval_thread_cnt + g_logger_thread_cnt;
 #endif
 
 UInt32 g_total_client_thread_cnt = g_client_thread_cnt + g_client_rem_thread_cnt + g_client_send_thread_cnt + g_client_dynamic_thread_cnt;
-UInt32 g_total_node_cnt = g_node_cnt + g_client_node_cnt + g_repl_cnt*g_node_cnt;
+UInt32 g_total_node_cnt = g_node_cnt + g_client_node_cnt + g_repl_cnt;
 UInt64 g_synth_table_size = SYNTH_TABLE_SIZE;
 UInt32 g_req_per_query = REQ_PER_QUERY;
 bool g_strict_ppt = STRICT_PPT == 1;
