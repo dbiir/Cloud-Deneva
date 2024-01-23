@@ -53,7 +53,7 @@ public:
 	uint64_t    orig_rts;
 	bool         locked;
 #endif
-#if CC_ALG == SILO || CC_ALG == MIXED_LOCK
+#if CC_ALG == SILO || CC_ALG == HDCC
 	ts_t 		tid;
 	bool isIntermediateState;
 	// ts_t 		epoch;
@@ -214,7 +214,7 @@ public:
 	int volatile    ready_part;
 	int volatile    ready_ulk;
 
-#if CC_ALG == MIXED_LOCK
+#if CC_ALG == HDCC
 	int algo; 	//calvin or silo
 	uint64_t original_return_id;
 	uint64_t        num_locks;
@@ -376,7 +376,7 @@ protected:
 	RC				validate_silo();
 #endif
 
-#if CC_ALG == MIXED_LOCK
+#if CC_ALG == HDCC
 	bool 			_pre_abort=false;
 	RC				validate_once();
 	RC				validate_lock();

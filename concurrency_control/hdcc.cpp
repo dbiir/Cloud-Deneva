@@ -5,7 +5,7 @@
 #include "msg_queue.h"
 #include "query.h"
 #include "row.h"
-#include "row_mixed_lock.h"
+#include "row_hdcc.h"
 #include "row_mvcc.h"
 #include "row_ts.h"
 #include "thread.h"
@@ -18,7 +18,7 @@
 #include "sequencer.h"
 #include <unordered_set>
 
-#if CC_ALG == MIXED_LOCK
+#if CC_ALG == HDCC
 // txn->algo == silo
 // silo验证
 RC TxnManager::validate_once() {

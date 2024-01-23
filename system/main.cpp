@@ -78,7 +78,7 @@ CalvinLockThread * calvin_lock_thds;
 CalvinSequencerThread * calvin_seq_thds;
 SnapperCheckThread * snapper_check_thd;
 #endif
-#if CC_ALG == MIXED_LOCK
+#if CC_ALG == HDCC
 CalvinLockThread * calvin_lock_thds;
 CalvinSequencerThread * calvin_seq_thds;
 ConflictThread * conflict_thds;
@@ -207,13 +207,13 @@ int main(int argc, char *argv[]) {
 	aria_seq.init(m_wl);
 	printf("Done\n");
 #endif
-#if CC_ALG == CALVIN || CC_ALG == MIXED_LOCK || CC_ALG == SNAPPER
+#if CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == SNAPPER
 	printf("Initializing sequencer... ");
 	fflush(stdout);
 	seq_man.init(m_wl);
 	printf("Done\n");
 #endif
-#if CC_ALG == MIXED_LOCK
+#if CC_ALG == HDCC
 	printf("Initializing cc selector... ");
 	fflush(stdout);
 	cc_selector.init();
@@ -317,7 +317,7 @@ int main(int argc, char *argv[]) {
 #if CC_ALG == SNAPPER
 	all_thd_cnt += 3;	// sequencer + scheduler thread + sanpper_check_thread
 #endif
-#if CC_ALG == MIXED_LOCK
+#if CC_ALG == HDCC
 		all_thd_cnt += 3; //sequencer + scheduler thread + conflict thread
 #endif
 #if CC_ALG == ARIA
@@ -354,7 +354,7 @@ int main(int argc, char *argv[]) {
 	calvin_seq_thds = new CalvinSequencerThread[1];
 	snapper_check_thd = new SnapperCheckThread;
 #endif
-#if CC_ALG == MIXED_LOCK
+#if CC_ALG == HDCC
 	calvin_lock_thds = new CalvinLockThread[1];
 	calvin_seq_thds = new CalvinSequencerThread[1];
 	conflict_thds=new ConflictThread[1];
@@ -506,7 +506,7 @@ int main(int argc, char *argv[]) {
 	pthread_create(&p_thds[id++], &attr, run_thread, (void *)snapper_check_thd);
 #endif
 
-#if CC_ALG == MIXED_LOCK
+#if CC_ALG == HDCC
 #if SET_AFFINITY
 	CPU_ZERO(&cpus);
 	CPU_SET(cpu_cnt, &cpus);

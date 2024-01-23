@@ -160,7 +160,7 @@
 
 // WAIT_DIE, NO_WAIT, TIMESTAMP, MVCC, CALVIN, MAAT, WOOKONG, TICTOC, SI
 #define ISOLATION_LEVEL SERIALIZABLE
-#define CC_ALG WOOKONG
+#define CC_ALG HDCC
 #define YCSB_ABORT_MODE false
 #define QUEUE_CAPACITY_NEW 1000000
 // all transactions acquire tuples according to the primary key order.
@@ -199,7 +199,7 @@
 #define TXN_QUEUE_SIZE_LIMIT    THREAD_CNT
 // [CALVIN]
 #define SEQ_THREAD_CNT 4
-// [MIXED_LOCK]
+// [HDCC]
 #define CALVIN_THREAD_CNT 1
 #define SHARD_SIZE 100000
 // tpcc payment
@@ -433,7 +433,7 @@ enum PPSTxnType {
 #define DLI_DTA3 26
 #define SILO 27
 #define CNULL 28
-#define MIXED_LOCK 29
+#define HDCC 29
 #define SNAPPER 30
 #define ARIA 31
 // TIMESTAMP allocation method.

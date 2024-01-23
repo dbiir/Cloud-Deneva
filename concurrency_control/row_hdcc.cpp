@@ -1,13 +1,13 @@
 #include "txn.h"
 #include "row.h"
-#include "row_mixed_lock.h"
+#include "row_hdcc.h"
 #include "mem_alloc.h"
 #include "cc_selector.h"
 #include "tpcc_query.h"
 
-#if CC_ALG==MIXED_LOCK
+#if CC_ALG==HDCC
 
-void Row_mixed_lock::init(row_t * row) {
+void Row_hdcc::init(row_t * row) {
     _row = row;
     _latch = (pthread_mutex_t *) mem_allocator.alloc(sizeof(pthread_mutex_t));
     pthread_mutex_init( _latch, NULL );
@@ -28,18 +28,18 @@ void Row_mixed_lock::init(row_t * row) {
 }
 
 // lock_get
-RC Row_mixed_lock::lock_get(lock_t type, TxnManager *txn) {
+RC Row_hdcc::lock_get(lock_t type, TxnManager *txn) {
   uint64_t *txnids = NULL;
   int txncnt = 0;
   return lock_get(type, txn, txnids, txncnt);
 }
 
-void Row_mixed_lock::return_entry(LockEntry *entry) {
+void Row_hdcc::return_entry(LockEntry *entry) {
   // DEBUG_M("row_lock::return_entry free %lx\n",(uint64_t)entry);
   mem_allocator.free(entry, sizeof(LockEntry));
 }
 
-bool Row_mixed_lock::conflict_lock(lock_t l1, lock_t l2) {
+bool Row_hdcc::conflict_lock(lock_t l1, lock_t l2) {
   if (l1 == LOCK_NONE || l2 == LOCK_NONE)
     return false;
   else if (l1 == LOCK_EX || l2 == LOCK_EX)  //有任意写锁均不相容
@@ -48,7 +48,7 @@ bool Row_mixed_lock::conflict_lock(lock_t l1, lock_t l2) {
     return false;
 }
 #if EXTREME_MODE
-bool Row_mixed_lock::conflict_lock_extreme_mode(lock_t l1, lock_t l2, TxnManager *txn) {
+bool Row_hdcc::conflict_lock_extreme_mode(lock_t l1, lock_t l2, TxnManager *txn) {
   if(txn->algo == CALVIN){
     return conflict_lock(l1, l2);
   }
@@ -69,7 +69,7 @@ bool Row_mixed_lock::conflict_lock_extreme_mode(lock_t l1, lock_t l2, TxnManager
 }
 #endif
 
-LockEntry *Row_mixed_lock::get_entry() {
+LockEntry *Row_hdcc::get_entry() {
   LockEntry *entry = (LockEntry *)mem_allocator.alloc(sizeof(LockEntry));
   entry->type = LOCK_NONE;
   entry->txn = NULL;
@@ -78,7 +78,7 @@ LockEntry *Row_mixed_lock::get_entry() {
 }
 
 // Calvin和Silo共用锁机制
-RC Row_mixed_lock::lock_get(lock_t type, TxnManager *txn, uint64_t *&txnids, int &txncnt) {
+RC Row_hdcc::lock_get(lock_t type, TxnManager *txn, uint64_t *&txnids, int &txncnt) {
   RC rc;
   uint64_t starttime = get_sys_clock();
   uint64_t lock_get_start_time = starttime;  
@@ -165,7 +165,7 @@ final:
   return rc;
 }
 
-RC Row_mixed_lock::lock_release(TxnManager *txn) {
+RC Row_hdcc::lock_release(TxnManager *txn) {
   if (txn->algo == CALVIN && txn->isRecon()) {
     return RCOK;
   }
@@ -260,7 +260,7 @@ RC Row_mixed_lock::lock_release(TxnManager *txn) {
 
 // silo的验证
 // #if EXTREME_MODE
-bool Row_mixed_lock::validate(Access *access, bool in_write_set, unordered_set<uint64_t> &waitFor, bool &benefited) {
+bool Row_hdcc::validate(Access *access, bool in_write_set, unordered_set<uint64_t> &waitFor, bool &benefited) {
   ts_t tid_at_read = access->tid;
   bool readIntermediateState = access->isIntermediateState;
 
@@ -309,7 +309,7 @@ bool Row_mixed_lock::validate(Access *access, bool in_write_set, unordered_set<u
   return true;
 }
 // #else
-bool Row_mixed_lock::validate(Access *access, bool in_write_set) {
+bool Row_hdcc::validate(Access *access, bool in_write_set) {
   ts_t tid_at_read = access->tid;
   bool readIntermediateState = access->isIntermediateState;
   if (in_write_set)

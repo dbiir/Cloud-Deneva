@@ -69,7 +69,7 @@ RC CalvinLockThread::run() {
 		assert(msg->get_txn_id() != UINT64_MAX);
 		txn_man =
 				txn_table.get_transaction_manager(get_thd_id(), msg->get_txn_id(), msg->get_batch_id());
-#if CC_ALG != MIXED_LOCK
+#if CC_ALG != HDCC
 		assert(msg->get_rtype() == CL_QRY || msg->get_rtype() == CL_QRY_O);
 		
 #else
@@ -249,7 +249,7 @@ RC CalvinSequencerThread::run() {
 		switch (rtype) {
 			case CL_QRY:
 			case CL_QRY_O:
-#if CC_ALG == MIXED_LOCK || CC_ALG == SNAPPER
+#if CC_ALG == HDCC || CC_ALG == SNAPPER
 			case RTXN:
 #endif
 				// Query from client
