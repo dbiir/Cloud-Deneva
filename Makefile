@@ -29,8 +29,13 @@ OBJS_UNIT = $(addprefix obj/, $(notdir $(CPPS_UNIT:.cpp=.o)))
 
 #NOGRAPHITE=1
 
-all: rundb runcl
+all: check_directory rundb runcl
 #unit_test
+
+check_directory:
+    ifeq (,$(wildcard obj))
+	    mkdir obj
+    endif
 
 .PHONY: deps_db
 deps:$(CPPS_DB)
