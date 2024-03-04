@@ -78,7 +78,6 @@ void MessageQueue::enqueue(uint64_t thd_id, Message * msg,uint64_t dest) {
   entry->starttime = get_sys_clock();
   assert(entry->dest < g_total_node_cnt);
   uint64_t mtx_time_start = get_sys_clock();
-  // 实际上HDCC应该是要混合的，但是这里只是用了CALVIN的机制
 #if CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == SNAPPER
   // Need to have strict message ordering for sequencer thread
   uint64_t rand = thd_id % g_this_send_thread_cnt;

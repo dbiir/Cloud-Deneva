@@ -53,8 +53,8 @@ public:
     uint64_t get_total_conflict();
     uint64_t get_highest_conflict();
 private:
-    uint64_t *pstats;   //冲突统计信息指针
-    bool *is_high_conflict; //是否为高冲突分区
+    uint64_t *pstats;
+    bool *is_high_conflict;
 };
 
 #endif

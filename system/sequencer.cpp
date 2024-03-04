@@ -330,7 +330,6 @@ void Sequencer::process_txn(Message *msg, uint64_t thd_id, uint64_t early_start,
 			msg->rtype = CL_QRY;
 		}
 #elif CC_ALG == SNAPPER
-// 不确定CC_SELECTOR如果没有初始化是否还能用
 		if (cc_selector.get_best_cc(msg) == WAIT_DIE) {
 			msg->algo = WAIT_DIE;
 			if(msg->rtype == RTXN){
