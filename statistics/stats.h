@@ -17,7 +17,6 @@
 #ifndef _STATS_H_
 #define _STATS_H_
 #include <sys/times.h>
-#include <sys/vtimes.h>
 #include <time.h>
 
 #include "../system/global.h"

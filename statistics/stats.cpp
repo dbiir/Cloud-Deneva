@@ -17,7 +17,6 @@
 #include "stats.h"
 
 #include <sys/times.h>
-#include <sys/vtimes.h>
 #include <time.h>
 
 #include "client_txn.h"
