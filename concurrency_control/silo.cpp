@@ -175,7 +175,7 @@ TxnManager::finish(RC rc)
 		}
 	}
 	num_locks = 0;
-	memset(write_set, 0, 100);
+	memset(write_set, 0, sizeof(write_set));
 	// mem_allocator.free(write_set, sizeof(int) * txn->write_cnt);
 	return rc;
 }

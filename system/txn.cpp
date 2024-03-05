@@ -364,7 +364,7 @@ void TxnManager::init(uint64_t thd_id, Workload * h_wl) {
 		assert(false);
   _cur_tid = 0;
   num_locks = 0;
-  memset(write_set, 0, 100);
+  memset(write_set, 0, sizeof(write_set));
   // write_set = (int *) mem_allocator.alloc(sizeof(int) * 100);
 #endif
 #if CC_ALG == HDCC
@@ -375,7 +375,7 @@ void TxnManager::init(uint64_t thd_id, Workload * h_wl) {
 	calvin_locked_rows.init(MAX_ROW_PER_TXN);
 
 	num_locks = 0;
-	memset(write_set, 0, 100);
+	memset(write_set, 0, sizeof(write_set));
 	max_calvin_tid = 0;
 	max_calvin_bid = 0;
 #endif
@@ -496,13 +496,13 @@ void TxnManager::release() {
 #endif
 #if CC_ALG == SILO
   num_locks = 0;
-  memset(write_set, 0, 100);
+  memset(write_set, 0, sizeof(write_set));
   // mem_allocator.free(write_set, sizeof(int) * 100);
 #endif
 #if CC_ALG == HDCC
 	calvin_locked_rows.release();
 	num_locks = 0;
-	memset(write_set, 0, 100);
+	memset(write_set, 0, sizeof(write_set));
 	max_calvin_tid = 0;
 	max_calvin_bid = 0;
 #endif
