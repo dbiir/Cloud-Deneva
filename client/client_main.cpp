@@ -180,7 +180,7 @@ int main(int argc, char *argv[]) {
 	for (uint64_t i = 0; i < thd_cnt; i++) {
 #if SET_AFFINITY
 		CPU_ZERO(&cpus);
-#if TPORT_TYPE_IPC
+#if TPORT_TYPE == IPC
         CPU_SET(g_node_id * thd_cnt + cpu_cnt, &cpus);
 #elif !SET_AFFINITY
         CPU_SET(g_node_id * thd_cnt + cpu_cnt, &cpus);
