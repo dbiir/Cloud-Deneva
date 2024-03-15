@@ -19,7 +19,6 @@ CCSelector::~CCSelector(){
 }
 #if CC_ALG == SNAPPER
 int CCSelector::get_best_cc(Message *msg){
-#if PRORATE_TRANSACTION
     if(msg->rtype == CL_QRY){
         double r = (double)(rand() % 10000) / 10000;
         if (r < g_prorate_ratio) {
@@ -28,20 +27,17 @@ int CCSelector::get_best_cc(Message *msg){
     } else {
         return WAIT_DIE;
     }
-#endif
     return CALVIN;
 }
 #else
 int CCSelector::get_best_cc(Message *msg){
 // Prorate transactions to Silo as non-deterministic workload
-#if PRORATE_TRANSACTION
     if(msg->rtype == CL_QRY){
         double r = (double)(rand() % 10000) / 10000;
         if (r < g_prorate_ratio) {
             return SILO;
         }
     }
-#endif
 #if WORKLOAD == YCSB
     auto req = ((YCSBClientQueryMessage*)msg)->requests;
     for(uint64_t i = 0; i < req.size(); i++){
