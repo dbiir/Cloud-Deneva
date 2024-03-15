@@ -1,10 +1,7 @@
-import os,re,sys,math
+import os,re
 from experiments import configs
 from collections import OrderedDict
-#from experiments import config_names
 import glob
-import pprint
-import latency_stats as ls
 import itertools
 
 CONFIG_PARAMS = [
