@@ -96,13 +96,11 @@ void Logger::processRecord(uint64_t thd_id, uint64_t id) {
       if(record->rcd.iud == L_COMMIT || record->rcd.iud == L_ABORT) {
         flushBuffer(thd_id, true, id);
       }
-#if SYNCHRONIZATION
       if (record->rcd.iud == L_COMMIT) {
         if (IS_LOCAL(record->rcd.txn_id)) {
           work_queue.enqueue(thd_id,Message::create_message(record->rcd.txn_id,LOG_FLUSHED),false);
         }
       }
-#endif
     }
     mem_allocator.free(record,sizeof(LogRecord));
     INC_STATS(thd_id,log_process_time,get_sys_clock() - starttime);

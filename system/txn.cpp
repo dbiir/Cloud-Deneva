@@ -566,11 +566,9 @@ RC TxnManager::commit() {
 												g_node_id + g_node_cnt + g_client_node_cnt);
 		}
 		logger.enqueueRecord(record);
-#if SYNCHRONIZATION
 		if (IS_LOCAL(get_txn_id())) {
 			return WAIT;
 		}
-#endif
 #if CC_ALG == HDCC
 	}
 #endif
@@ -613,7 +611,7 @@ RC TxnManager::abort() {
 	if (IS_LOCAL(get_txn_id()) && warmup_done) {
 		INC_STATS_ARR(get_thd_id(),start_abort_commit_latency, timespan);
 	}
-#if LOGGING && LOG_REDO && CC_ALG != CALVIN
+#if LOGGING && CC_ALG != CALVIN
 #if CC_ALG == HDCC
 	if (algo != CALVIN) {
 #endif
@@ -701,7 +699,7 @@ RC TxnManager::start_commit() {
 	RC rc = RCOK;
 	DEBUG("%ld start_commit RO?%d\n",get_txn_id(),query->readonly());
 	if(is_multi_part()) {
-#if LOGGING && LOG_REDO && CC_ALG != CALVIN
+#if LOGGING && CC_ALG != CALVIN
 #if CC_ALG == HDCC
 	if (algo != CALVIN) {
 #endif
@@ -1365,7 +1363,7 @@ RC TxnManager::get_row(row_t * row, access_t type, row_t *& row_rtn) {
 
 #endif
 
-#if LOGGING && LOG_REDO && CC_ALG != CALVIN
+#if LOGGING && CC_ALG != CALVIN
 	if (type == WR) {
 #if CC_ALG == HDCC
 		if (algo != CALVIN) {

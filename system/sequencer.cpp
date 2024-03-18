@@ -405,7 +405,7 @@ void Sequencer::process_txn(Message *msg, uint64_t thd_id, uint64_t early_start,
 			while (!fill_queue[*participant].push(msg) && !simulation->is_done()) {
 			}
 		}
-#if LOGGING & LOG_REDO
+#if LOGGING
 		char * data = (char *)malloc(sizeof(char) * 10);
 		logger.writeToBuffer(thd_id, data, sizeof(data));
 #endif
@@ -419,7 +419,7 @@ void Sequencer::process_txn(Message *msg, uint64_t thd_id, uint64_t early_start,
 void Sequencer::send_next_batch(uint64_t thd_id) {
 	uint64_t prof_stat = get_sys_clock();
 	qlite_ll * en = wl_tail;
-#if LOGGING & LOG_REDO
+#if LOGGING
 #if CC_ALG == HDCC
 	logger.enqueueRecord(logger.createRecord(thd_id, L_C_FLUSH, 0, 0, 0));
 #else
