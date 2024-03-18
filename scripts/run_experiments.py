@@ -234,7 +234,7 @@ for exp in exps:
         os.chdir(tmp_path)
 
         # For drawing plots, any experiment need to only have one or two varibles (include algo)
-        # Algo is always in the second, the other variable is the third
+        # Algo is always the second place in e and the last iteration of e (write in experiments.py)
         # The code below does not support more than 3 variables
         if e[1] not in algo:
             algo.append(e[1])
@@ -259,7 +259,10 @@ for exp in exps:
         plot_f.write('#\t')
         plot_f.write('\t'.join(map(str, algo)) + '\n')
         for variable_ in variable:
-            plot_f.write(str(variable_) + '\t')
+            if type(variable_) == int or type(variable_) == float:
+                plot_f.write(str(variable_) + '\t')
+            else:
+                plot_f.write(str(i // algo_cnt) + '\t')
             for c in range(algo_cnt):
                 plot_f.write(str(plot_data[i]) + '\t')
                 i += 1
@@ -274,7 +277,7 @@ for exp in exps:
         for keyword in draw_keywords:
             if keyword not in calculate_sets[0]:
                 continue
-            cmd = "gnuplot -c simple_plot.gp {} {} {} {}".format(experiment_dir + keyword + '_plot.txt', (exp + keyword).upper(), experiment_dir + keyword + '_plot.pdf', ' '.join(map(str, algo)))
+            cmd = "gnuplot -c simple_plot.gp {} {} {} {}".format(experiment_dir + keyword + '_plot.txt', (exp + '_' + keyword).upper(), experiment_dir + keyword + '_plot.pdf', ' '.join(map(str, algo)))
             print(cmd)
             os.system(cmd)
     os.chdir('..')

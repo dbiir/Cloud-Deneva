@@ -116,13 +116,28 @@ def ycsb_dist_ratio():
     load = [10000]
     mpr=[0,0.2,0.4,0.6,0.8,1]
     fmt = ["WORKLOAD","CC_ALG","MPR","NODE_CNT","SYNTH_TABLE_SIZE","TUP_WRITE_PERC","TXN_WRITE_PERC","MAX_TXN_IN_FLIGHT"]
-    exp = [[wl,cc,mpr,n,base_table_size*n,tup_wr_perc,txn_wr_perc,ld] for ld,tup_wr_perc,txn_wr_perc,n,cc,mpr in itertools.product(load,tup_write_perc,txn_write_perc,nnodes,algos,mpr)]
+    exp = [[wl,algo,mpr,n,base_table_size*n,tup_wr_perc,txn_wr_perc,ld] for ld,tup_wr_perc,txn_wr_perc,n,mpr,algo in itertools.product(load,tup_write_perc,txn_write_perc,nnodes,mpr,algos)]
+    return fmt,exp
+
+def ycsb_log():
+    wl = 'YCSB'
+    nnodes = [2]
+    algos=['HDCC','CALVIN','SILO']
+    base_table_size=1048576*8
+    txn_write_perc = [1.0]
+    tup_write_perc = [0.2]
+    load = [10000]
+    tcnt = [16]
+    skew = [0.9]
+    logging = ['true','false']
+    fmt = ["WORKLOAD","CC_ALG","LOGGING","NODE_CNT","SYNTH_TABLE_SIZE","TUP_WRITE_PERC","TXN_WRITE_PERC","MAX_TXN_IN_FLIGHT","ZIPF_THETA","THREAD_CNT"]
+    exp = [[wl,algo,log,n,base_table_size*n,tup_wr_perc,txn_wr_perc,ld,sk,thr] for thr,txn_wr_perc,tup_wr_perc,ld,n,sk,log,algo in itertools.product(tcnt,txn_write_perc,tup_write_perc,load,nnodes,skew,logging,algos)]
     return fmt,exp
 
 def tpcc_scaling():
     wl = 'TPCC'
     nnodes = [1,2,4,6,8,12]
-    nalgos=['HDCC']
+    algos=['HDCC']
     npercpay=[0.489]
     num_wh=[32]
     load = [10000]
@@ -130,13 +145,13 @@ def tpcc_scaling():
     ctcnt = [4]
     prorate = [0]
     fmt = ["WORKLOAD","CC_ALG","NODE_CNT","PERC_PAYMENT","PRORATE_RATIO","NUM_WH","MAX_TXN_IN_FLIGHT","THREAD_CNT","CLIENT_THREAD_CNT"]
-    exp = [[wl,cc,n,pp,prorate_rate,wh*n,tif,thr,cthr] for thr,cthr,tif,pp,prorate_rate,n,cc,wh in itertools.product(tcnt,ctcnt,load,npercpay,prorate,nnodes,nalgos,num_wh)]
+    exp = [[wl,algo,n,pp,prorate_rate,wh*n,tif,thr,cthr] for thr,cthr,tif,pp,prorate_rate,n,wh,algo in itertools.product(tcnt,ctcnt,load,npercpay,prorate,nnodes,num_wh,algos)]
     return fmt,exp
 
 def tpcc_wh():
     wl = 'TPCC'
     nnodes = [2]
-    nalgos=['HDCC']
+    algos=['HDCC']
     npercpay=[0.489]
     num_wh=[216,128,64,32,16,8]
     load = [10000]
@@ -144,19 +159,19 @@ def tpcc_wh():
     ctcnt = [4]
     prorate = [0]
     fmt = ["WORKLOAD","CC_ALG","NUM_WH","NODE_CNT","PERC_PAYMENT","PRORATE_RATIO","MAX_TXN_IN_FLIGHT","THREAD_CNT","CLIENT_THREAD_CNT"]
-    exp = [[wl,cc,wh*n,n,pp,prorate_rate,tif,thr,cthr] for thr,cthr,tif,pp,prorate_rate,n,cc,wh in itertools.product(tcnt,ctcnt,load,npercpay,prorate,nnodes,nalgos,num_wh)]
+    exp = [[wl,algo,wh*n,n,pp,prorate_rate,tif,thr,cthr] for thr,cthr,tif,pp,prorate_rate,n,wh,algo in itertools.product(tcnt,ctcnt,load,npercpay,prorate,nnodes,num_wh,algos)]
     return fmt,exp
 
 def tpcc_dist_ratio():
     wl = 'TPCC'
-    nalgos=['HDCC']
+    algos=['HDCC']
     mpr=[0,0.2,0.4,0.6,0.8,1]
     nnodes = [2]
     npercpay=[0.489]
     wh=32
     load = [10000]
     fmt = ["WORKLOAD","CC_ALG","MPR","NODE_CNT","PERC_PAYMENT","NUM_WH","MAX_TXN_IN_FLIGHT"]
-    exp = [[wl,cc,mpr,n,pp,wh*n,tif] for tif,pp,n,cc,mpr in itertools.product(load,npercpay,nnodes,nalgos,mpr)]
+    exp = [[wl,algo,mpr,n,pp,wh*n,tif] for tif,pp,n,mpr,algo in itertools.product(load,npercpay,nnodes,mpr,algos)]
     return fmt,exp
 
 ##############################
@@ -169,6 +184,7 @@ experiment_map = {
     'ycsb_writes': ycsb_writes,
     'ycsb_skew': ycsb_skew,
     'ycsb_dist_ratio': ycsb_dist_ratio,
+    'ycsb_log': ycsb_log,
     'tpcc_scaling': tpcc_scaling,
     'tpcc_wh': tpcc_wh,
     'tpcc_dist_ratio': tpcc_dist_ratio,
