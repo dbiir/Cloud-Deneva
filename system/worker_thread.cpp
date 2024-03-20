@@ -1423,7 +1423,7 @@ RC WorkerThread::process_aria_ack(Message * msg) {
   if (simulation->barriers[msg->get_return_id()]) {
     work_queue.enqueue(_thd_id, msg, false);
   } else {
-    simulation->barriers[msg->get_return_id()]++;
+    simulation->barriers[msg->get_return_id()] = true;
     simulation->barrier_count++;
     msg->release();
     delete msg;
