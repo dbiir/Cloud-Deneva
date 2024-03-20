@@ -159,13 +159,6 @@ void CCSelector::update_conflict_stats(row_t * row){
 void CCSelector::update_conflict_stats(TPCCQuery *query, row_t * row){
     auto table_name = row->get_table_name();
     uint64_t key = row->get_primary_key();
-    uint64_t w_id = query->w_id;
-	uint64_t d_id = query->d_id;
-	uint64_t c_id = query->c_id;
-	uint64_t d_w_id = query->d_w_id;
-	uint64_t c_w_id = query->c_w_id;
-	uint64_t c_d_id = query->c_d_id;
-	char * c_last = query->c_last;    
     if(strcmp(table_name, "WAREHOUSE") == 0){
         key += TPCCTableKey::WAREHOUSE_OFFSET;
     }else if(strcmp(table_name, "DISTRICT") == 0){
