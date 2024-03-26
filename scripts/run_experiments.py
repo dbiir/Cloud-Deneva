@@ -79,8 +79,8 @@ for exp in exps:
     os.system(cmd)
 
     calculate_sets = []
-    algo = []
-    variable = []
+    variable1 = []
+    variable2 = []
 
     for e in experiments:
         cfgs = get_cfgs(fmt,e)
@@ -108,7 +108,7 @@ for exp in exps:
         print(cmd)
         res = os.system(cmd)
         if res != 0:
-            print('fail to compile\n', file=sys.stderr)
+            print('\033[91m' + 'fail to compile\n' + '\033[0m', file=sys.stderr)
             continue
         if not execute:
             continue
@@ -233,17 +233,17 @@ for exp in exps:
         calculate_sets.append(calculate)
         os.chdir(tmp_path)
 
-        # For drawing plots, any experiment need to only have one or two varibles (include algo)
-        # Algo is always the second place in e and the last iteration of e (write in experiments.py)
+        # For drawing plots, any experiment need to only have one or two varibles
+        # The first varible is always the second place in e and the last iteration of e (write in experiments.py)
         # The code below does not support more than 3 variables
-        if e[1] not in algo:
-            algo.append(e[1])
-        if e[2] not in variable:
-            variable.append(e[2])
+        if e[1] not in variable1:
+            variable1.append(e[1])
+        if e[2] not in variable2:
+            variable2.append(e[2])
 
-    algo_cnt = len(algo)
+    variable1_cnt = len(variable1)
 
-    if algo_cnt == 0 or len(calculate_sets) / algo_cnt != len(variable):
+    if variable1_cnt == 0 or len(calculate_sets) / variable1_cnt != len(variable2):
         print('Some experiments are missing, cannot draw plots')
         continue
 
@@ -257,13 +257,13 @@ for exp in exps:
         plot_f = open(keyword + '_plot.txt', 'a')
 
         plot_f.write('#\t')
-        plot_f.write('\t'.join(map(str, algo)) + '\n')
-        for variable_ in variable:
+        plot_f.write('\t'.join(map(str, variable1)) + '\n')
+        for variable_ in variable2:
             if type(variable_) == int or type(variable_) == float:
                 plot_f.write(str(variable_) + '\t')
             else:
-                plot_f.write(str(i // algo_cnt) + '\t')
-            for c in range(algo_cnt):
+                plot_f.write(str(i // variable1_cnt) + '\t')
+            for c in range(variable1_cnt):
                 plot_f.write(str(plot_data[i]) + '\t')
                 i += 1
             plot_f.write('\n')
@@ -277,7 +277,7 @@ for exp in exps:
         for keyword in draw_keywords:
             if keyword not in calculate_sets[0]:
                 continue
-            cmd = "gnuplot -c simple_plot.gp {} {} {} {}".format(experiment_dir + keyword + '_plot.txt', (exp + '_' + keyword).upper(), experiment_dir + keyword + '_plot.pdf', ' '.join(map(str, algo)))
+            cmd = "gnuplot -c simple_plot.gp {} {} {} {}".format(experiment_dir + keyword + '_plot.txt', (exp + '_' + keyword).upper(), experiment_dir + keyword + '_plot.pdf', ' '.join(map(str, variable1)))
             print(cmd)
             os.system(cmd)
     os.chdir('..')
