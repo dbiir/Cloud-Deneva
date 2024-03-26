@@ -244,6 +244,7 @@ extern bool g_strict_ppt;
 extern UInt32 g_field_per_tuple;
 extern UInt32 g_init_parallelism;
 extern double g_mpr;
+extern double g_mpr_neworder;
 extern double g_mpitem;
 
 // TPCC

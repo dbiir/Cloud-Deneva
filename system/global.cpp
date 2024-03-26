@@ -252,6 +252,7 @@ UInt32 g_aria_batch_size = ARIA_BATCH_SIZE;
 uint32_t g_max_num_waits = MAX_NUM_WAITS;
 
 double g_mpr = MPR;
+double g_mpr_neworder = MPR_NEWORDER;
 double g_mpitem = MPIR;
 
 // PPS (Product-Part-Supplier)

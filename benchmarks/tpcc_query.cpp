@@ -224,7 +224,7 @@ BaseQuery * TPCCQueryGenerator::gen_new_order(uint64_t home_partition) {
 #ifdef NO_REMOTE
   if(r_mpr < 0)
 #else
-	if(r_mpr < g_mpr)
+	if(r_mpr < g_mpr_neworder)
 #endif
     part_limit = g_part_per_txn;
   else
@@ -238,7 +238,7 @@ BaseQuery * TPCCQueryGenerator::gen_new_order(uint64_t home_partition) {
     }
     ol_i_ids.insert(item->ol_i_id);
     item->ol_quantity = URand(1, 10);
-		if (r_mpr > g_mpr || g_node_cnt == 1) {
+		if (r_mpr > g_mpr_neworder || g_node_cnt == 1) {
 			// home warehouse
 			item->ol_supply_w_id = query->w_id;
     } else {

@@ -144,8 +144,10 @@ def tpcc_scaling():
     tcnt = [16]
     ctcnt = [4]
     prorate = [0]
-    fmt = ["WORKLOAD","CC_ALG","NODE_CNT","PERC_PAYMENT","PRORATE_RATIO","NUM_WH","MAX_TXN_IN_FLIGHT","THREAD_CNT","CLIENT_THREAD_CNT"]
-    exp = [[wl,algo,n,pp,prorate_rate,wh*n,tif,thr,cthr] for thr,cthr,tif,pp,prorate_rate,n,wh,algo in itertools.product(tcnt,ctcnt,load,npercpay,prorate,nnodes,num_wh,algos)]
+    mpr = [0.15]
+    mpr_neworder = [0.1]
+    fmt = ["WORKLOAD","CC_ALG","NODE_CNT","PERC_PAYMENT","PRORATE_RATIO","NUM_WH","MAX_TXN_IN_FLIGHT","THREAD_CNT","CLIENT_THREAD_CNT","MPR","MPR_NEWORDER"]
+    exp = [[wl,algo,n,pp,prorate_rate,wh*n,tif,thr,cthr,m,mn] for thr,cthr,tif,pp,prorate_rate,n,m,mn,wh,algo in itertools.product(tcnt,ctcnt,load,npercpay,prorate,nnodes,mpr,mpr_neworder,num_wh,algos)]
     return fmt,exp
 
 def tpcc_wh():
@@ -158,8 +160,10 @@ def tpcc_wh():
     tcnt = [16]
     ctcnt = [4]
     prorate = [0]
-    fmt = ["WORKLOAD","CC_ALG","NUM_WH","NODE_CNT","PERC_PAYMENT","PRORATE_RATIO","MAX_TXN_IN_FLIGHT","THREAD_CNT","CLIENT_THREAD_CNT"]
-    exp = [[wl,algo,wh*n,n,pp,prorate_rate,tif,thr,cthr] for thr,cthr,tif,pp,prorate_rate,n,wh,algo in itertools.product(tcnt,ctcnt,load,npercpay,prorate,nnodes,num_wh,algos)]
+    mpr = [0.15]
+    mpr_neworder = [0.1]
+    fmt = ["WORKLOAD","CC_ALG","NUM_WH","NODE_CNT","PERC_PAYMENT","PRORATE_RATIO","MAX_TXN_IN_FLIGHT","THREAD_CNT","CLIENT_THREAD_CNT","MPR","MPR_NEWORDER"]
+    exp = [[wl,algo,wh*n,n,pp,prorate_rate,tif,thr,cthr,m,mn] for thr,cthr,tif,pp,prorate_rate,n,m,mn,wh,algo in itertools.product(tcnt,ctcnt,load,npercpay,prorate,nnodes,mpr,mpr_neworder,num_wh,algos)]
     return fmt,exp
 
 def tpcc_dist_ratio():
@@ -238,6 +242,7 @@ configs = {
 #TPCC
     "NUM_WH":32,
     "PERC_PAYMENT":0.489,
+    "MPR_NEWORDER":"MPR",
 #TXN
     "PRORATE_RATIO":0,
     "LOGGING":"false",
