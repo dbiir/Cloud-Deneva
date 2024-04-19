@@ -117,25 +117,38 @@ for exp in exps:
         print(cmd)
         os.system(cmd)
 
+        nnodes = cfgs["NODE_CNT"]
+        nclnodes = cfgs["CLIENT_NODE_CNT"]
+        nstnodes = cfgs["STORAGE_NODE_CNT"]
+        if nclnodes == "NODE_CNT":
+            nclnodes = nnodes
+        if nstnodes == "NODE_CNT":
+            nstnodes = nnodes
+
         if remote:
             machines_ = vcloud_machines
             location = deploy_location
             uname = username
 
-            machines = machines_[:(cfgs["NODE_CNT"])]+machines_[len(machines_)//2:(len(machines_)//2+cfgs["NODE_CNT"])]
+            machines = machines_[:(cfgs["NODE_CNT"])]+machines_[len(machines_)//3:(len(machines_)//3+nclnodes)]+machines_[2*len(machines_)//3:(2*len(machines_)//3+nstnodes)]
             with open("ifconfig.txt", 'w') as f_ifcfg:
                 for m in machines:
                     f_ifcfg.write(m + "\n")
 
+            distinct_machines = []
+            for m in machines:
+                if m not in distinct_machines:
+                    distinct_machines.append(m)
+
             if cfgs["WORKLOAD"] == "TPCC":
-                files = ["rundb", "runcl", "ifconfig.txt", "./benchmarks/TPCC_short_schema.txt", "./benchmarks/TPCC_full_schema.txt"]
+                files = ["rundb", "runcl", "runst", "ifconfig.txt", "./benchmarks/TPCC_short_schema.txt", "./benchmarks/TPCC_full_schema.txt"]
             elif cfgs["WORKLOAD"] == "YCSB":
-                files = ["rundb", "runcl", "ifconfig.txt", "benchmarks/YCSB_schema.txt"]
-            for m in machines[:cfgs["NODE_CNT"]]:
+                files = ["rundb", "runcl", "runst", "ifconfig.txt", "benchmarks/YCSB_schema.txt"]
+            for m in distinct_machines:
                 cmd = './scripts/kill.sh {} {}'.format(uname, m)
                 print(cmd)
                 os.system(cmd)
-            for m, f in itertools.product(machines, files):
+            for m, f in itertools.product(distinct_machines, files):
                 cmd = 'scp {}/{} {}@{}:/{}'.format(PATH, f, uname, m, location)
                 print(cmd)
                 os.system(cmd)
@@ -152,7 +165,7 @@ for exp in exps:
 
             print("Deploying: {}".format(output_f))
             os.chdir('./scripts')
-            cmd = './vcloud_deploy.sh \'{}\' /{}/ {} {} {}'.format(' '.join(machines), location, cfgs["NODE_CNT"], uname, perfTime, deploy_location)
+            cmd = './vcloud_deploy.sh \'{}\' /{}/ {} {} {} {} {} {}'.format(' '.join(machines), location, nnodes, nclnodes, nstnodes, uname, perfTime, deploy_location)
             print(cmd)
             fromtimelist.append(str(int(time.time())) + "000")
             os.system(cmd)
@@ -169,21 +182,25 @@ for exp in exps:
                 cmd = 'scp {}@{}:/{}/dbresults.out {}/{}_{}.out'.format(uname, m, location, experiment_dir, n, output_f)
                 print(cmd)
                 os.system(cmd)
-            for m,n in zip(machines[len(machines)//2:], range(cfgs["NODE_CNT"])):
+            for m,n in zip(machines[len(machines)//3:], range(cfgs["NODE_CNT"])):
                 cmd = 'scp {}@{}:/{}/clresults.out {}/{}_{}.out'.format(uname, m, location, experiment_dir, n+cfgs["NODE_CNT"], output_f)
+                print(cmd)
+                os.system(cmd)
+            for m,n in zip(machines[2*len(machines)//3:], range(cfgs["NODE_CNT"])):
+                cmd = 'scp {}@{}:/{}/stresults.out {}/{}_{}.out'.format(uname, m, location, experiment_dir, n+2*cfgs["NODE_CNT"], output_f)
                 print(cmd)
                 os.system(cmd)
 
         else:
-            nnodes = cfgs["NODE_CNT"]
-            nclnodes = cfgs["NODE_CNT"]
             pids = []
             print("Deploying: {}".format(output_f))
-            for n in range(nnodes+nclnodes):
+            for n in range(nnodes+nclnodes+nstnodes):
                 if n < nnodes:
                     cmd = "./rundb -nid{}".format(n)
-                else:
+                elif n < nnodes + nclnodes:
                     cmd = "./runcl -nid{}".format(n)
+                else:
+                    cmd = "./runst -nid{}".format(n)
                 print(cmd)
                 cmd = shlex.split(cmd)
                 ofile_n = "{}{}_{}.out".format(experiment_dir,n,output_f)

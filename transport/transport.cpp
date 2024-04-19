@@ -211,6 +211,17 @@ void Transport::init() {
         recv_sockets.push_back(sock);
         DEBUG("Socket insert: {%ld}: %ld\n",node_id,(uint64_t)sock);
       }
+    } else if (ISSTORAGEN(node_id)) {
+      for (uint64_t storage_thread_id = g_storage_thread_cnt + g_storage_rem_thread_cnt;
+           storage_thread_id <
+               g_storage_thread_cnt + g_storage_rem_thread_cnt + g_storage_send_thread_cnt;
+           storage_thread_id++) {
+        uint64_t port_id =
+            get_port_id(node_id, g_node_id, storage_thread_id % g_storage_send_thread_cnt);
+        Socket * sock = bind(port_id);
+        recv_sockets.push_back(sock);
+        DEBUG("Socket insert: {%ld}: %ld\n",node_id,(uint64_t)sock);
+      }
     } else {
       for (uint64_t server_thread_id = g_thread_cnt + g_rem_thread_cnt;
            server_thread_id < g_thread_cnt + g_rem_thread_cnt + g_send_thread_cnt;
@@ -233,6 +244,18 @@ void Transport::init() {
         Socket * sock = connect(node_id,port_id);
         send_sockets.insert(std::make_pair(sender,sock));
         DEBUG("Socket insert: {%ld,%ld}: %ld\n",node_id,client_thread_id,(uint64_t)sock);
+      }
+    } else if (ISSTORAGE) {
+      for (uint64_t storage_thread_id = g_storage_thread_cnt + g_storage_rem_thread_cnt;
+           storage_thread_id <
+               g_storage_thread_cnt + g_storage_rem_thread_cnt + g_storage_send_thread_cnt;
+           storage_thread_id++) {
+        uint64_t port_id =
+            get_port_id(g_node_id, node_id, storage_thread_id % g_storage_send_thread_cnt);
+        std::pair<uint64_t,uint64_t> sender = std::make_pair(node_id,storage_thread_id);
+        Socket * sock = connect(node_id,port_id);
+        send_sockets.insert(std::make_pair(sender,sock));
+        DEBUG("Socket insert: {%ld,%ld}: %ld\n",node_id,storage_thread_id,(uint64_t)sock);
       }
     } else {
       for (uint64_t server_thread_id = g_thread_cnt + g_rem_thread_cnt;

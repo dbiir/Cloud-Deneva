@@ -38,6 +38,7 @@ public:
 	void combine(Stats_thd * stats);
 	void print(FILE * outf, bool prog);
 	void print_client(FILE * outf, bool prog);
+  void print_storage(FILE * outf, bool prog);
 	void clear();
 
 	char _pad2[CL_SIZE];
@@ -450,6 +451,7 @@ public:
 	void commit(uint64_t thd_id);
 	void abort(uint64_t thd_id);
 	void print_client(bool prog);
+  void print_storage(bool prog);
 	void print(bool prog);
 	void print_cnts(FILE * outf);
 	void print_lat_distr();

@@ -184,7 +184,7 @@ UInt32 g_total_thread_cnt = g_thread_cnt + g_rem_thread_cnt + g_send_thread_cnt 
 #endif
 
 UInt32 g_total_client_thread_cnt = g_client_thread_cnt + g_client_rem_thread_cnt + g_client_send_thread_cnt + g_client_dynamic_thread_cnt;
-UInt32 g_total_node_cnt = g_node_cnt + g_client_node_cnt + g_repl_cnt;
+UInt32 g_total_node_cnt = g_node_cnt + g_client_node_cnt + g_storage_node_cnt;
 UInt64 g_synth_table_size = SYNTH_TABLE_SIZE;
 UInt32 g_req_per_query = REQ_PER_QUERY;
 bool g_strict_ppt = STRICT_PPT == 1;
@@ -199,10 +199,19 @@ UInt32 g_servers_per_client = 0;
 UInt32 g_clients_per_server = 0;
 UInt32 g_server_start_node = 0;
 
-UInt32 g_this_thread_cnt = ISCLIENT ? g_client_thread_cnt : g_thread_cnt;
-UInt32 g_this_rem_thread_cnt = ISCLIENT ? g_client_rem_thread_cnt : g_rem_thread_cnt;
-UInt32 g_this_send_thread_cnt = ISCLIENT ? g_client_send_thread_cnt : g_send_thread_cnt;
-UInt32 g_this_total_thread_cnt = ISCLIENT ? g_total_client_thread_cnt : g_total_thread_cnt;
+UInt32 g_storage_node_cnt = STORAGE_NODE_CNT;
+UInt32 g_storage_thread_cnt = STORAGE_THREAD_CNT;
+UInt32 g_storage_rem_thread_cnt = STORAGE_REM_THREAD_CNT;
+UInt32 g_storage_send_thread_cnt = STORAGE_SEND_THREAD_CNT;
+UInt32 g_total_storage_thread_cnt = g_storage_thread_cnt + g_storage_rem_thread_cnt + g_storage_send_thread_cnt;
+bool g_storage_all_in_one = STORAGE_ALL_IN_ONE;
+UInt32 g_storage_log_node_cnt = STORAGE_LOG_NODE_CNT;
+UInt32 g_storage_log_thread_cnt = STORAGE_LOG_THREAD_CNT;
+
+UInt32 g_this_thread_cnt = ISSERVER ? g_thread_cnt : ISCLIENT ? g_client_thread_cnt : g_storage_thread_cnt;
+UInt32 g_this_rem_thread_cnt = ISSERVER ? g_rem_thread_cnt : ISCLIENT ? g_client_rem_thread_cnt : g_storage_rem_thread_cnt;
+UInt32 g_this_send_thread_cnt = ISSERVER ? g_send_thread_cnt : ISCLIENT ? g_client_send_thread_cnt : g_storage_send_thread_cnt;
+UInt32 g_this_total_thread_cnt = ISSERVER ? g_total_thread_cnt : ISCLIENT ? g_total_client_thread_cnt : g_total_storage_thread_cnt;
 UInt32 g_this_dynamic_thread_cnt = ISCLIENT ? g_client_dynamic_thread_cnt : 0;
 
 UInt32 g_max_txn_per_part = MAX_TXN_PER_PART;

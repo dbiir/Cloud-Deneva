@@ -203,13 +203,20 @@ void parser(int argc, char * argv[]) {
 #endif
   g_total_client_thread_cnt =
       g_client_thread_cnt + g_client_rem_thread_cnt + g_client_send_thread_cnt + g_client_dynamic_thread_cnt;
-  g_total_node_cnt = g_node_cnt + g_client_node_cnt + g_repl_cnt*g_node_cnt;
+  g_total_storage_thread_cnt = g_storage_thread_cnt + g_storage_rem_thread_cnt + g_storage_send_thread_cnt;
+  g_total_node_cnt = g_node_cnt + g_client_node_cnt + g_storage_node_cnt;
   if(ISCLIENT) {
     g_this_thread_cnt = g_client_thread_cnt;
     g_this_rem_thread_cnt = g_client_rem_thread_cnt;
     g_this_send_thread_cnt = g_client_send_thread_cnt;
     g_this_total_thread_cnt = g_total_client_thread_cnt;
     g_this_dynamic_thread_cnt = g_client_dynamic_thread_cnt;
+  } else if (ISSTORAGE) {
+    g_this_thread_cnt = g_storage_thread_cnt;
+    g_this_rem_thread_cnt = g_storage_rem_thread_cnt;
+    g_this_send_thread_cnt = g_storage_send_thread_cnt;
+    g_this_total_thread_cnt = g_total_storage_thread_cnt;
+    g_this_dynamic_thread_cnt = 0;
   } else {
     g_this_thread_cnt = g_thread_cnt;
     g_this_rem_thread_cnt = g_rem_thread_cnt;

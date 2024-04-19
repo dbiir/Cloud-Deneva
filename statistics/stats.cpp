@@ -559,6 +559,11 @@ void Stats_thd::print_client(FILE * outf, bool prog) {
   //client_client_latency.print(outf);
 }
 
+void Stats_thd::print_storage(FILE * outf, bool prog) {
+  // [ ]: print storage stats
+  fprintf(outf, "TODO: print storage stats\n");
+}
+
 void Stats_thd::print(FILE * outf, bool prog) {
   fprintf(outf, "total_runtime=%f", total_runtime / BILLION);
   // Execution
@@ -1866,6 +1871,33 @@ void Stats::print_client(bool prog) {
 		fclose(outf);
   }
   fflush(stdout);
+}
+
+void Stats::print_storage(bool prog) {
+  fflush(stdout);
+  if (!STATS_ENABLE) return;
+
+  totals->clear();
+  for (uint64_t i = 0; i < thd_cnt; i++) totals->combine(_stats[i]);
+
+  FILE * outf;
+  if (output_file != NULL)
+		outf = fopen(output_file, "w");
+  else
+    outf = stdout;
+  if(prog)
+	  fprintf(outf, "[prog] ");
+  else
+	  fprintf(outf, "[summary] ");
+  totals->print_storage(outf,prog);
+  mem_util(outf);
+  cpu_util(outf);
+
+  fprintf(outf, "\n");
+  fflush(outf);
+  if (output_file != NULL) {
+    fclose(outf);
+  }
 }
 
 void Stats::print(bool prog) {

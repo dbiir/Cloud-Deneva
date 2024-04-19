@@ -13,22 +13,22 @@ LDFLAGS = -L. -Wl,-rpath -pthread -lrt -lnanomsg -lanl -lcurl
 LDFLAGS += $(CFLAGS)
 LIBS =
 
-DB_MAINS = ./client/client_main.cpp ./system/sequencer_main.cpp ./unit_tests/unit_main.cpp
-CL_MAINS = ./system/main.cpp ./system/sequencer_main.cpp ./unit_tests/unit_main.cpp
-UNIT_MAINS = ./system/main.cpp ./client/client_main.cpp ./system/sequencer_main.cpp
+DB_MAINS = ./client/client_main.cpp ./storage/storage_main.cpp
+CL_MAINS = ./system/main.cpp ./storage/storage_main.cpp
+ST_MAINS = ./system/main.cpp ./client/client_main.cpp
 
 CPPS_DB = $(foreach dir,$(SRC_DIRS),$(filter-out $(DB_MAINS), $(wildcard $(dir)*.cpp)))
 CPPS_CL = $(foreach dir,$(SRC_DIRS),$(filter-out $(CL_MAINS), $(wildcard $(dir)*.cpp)))
-CPPS_UNIT = $(foreach dir,$(SRC_DIRS),$(filter-out $(UNIT_MAINS), $(wildcard $(dir)*.cpp)))
+CPPS_ST = $(foreach dir,$(SRC_DIRS),$(filter-out $(ST_MAINS), $(wildcard $(dir)*.cpp)))
 
 #CPPS = $(wildcard *.cpp)
 OBJS_DB = $(addprefix obj/, $(notdir $(CPPS_DB:.cpp=.o)))
 OBJS_CL = $(addprefix obj/, $(notdir $(CPPS_CL:.cpp=.o)))
-OBJS_UNIT = $(addprefix obj/, $(notdir $(CPPS_UNIT:.cpp=.o)))
+OBJS_ST = $(addprefix obj/, $(notdir $(CPPS_ST:.cpp=.o)))
 
 #NOGRAPHITE=1
 
-all: check_directory rundb runcl
+all: check_directory rundb runcl runst
 #unit_test
 
 check_directory:
@@ -43,20 +43,22 @@ deps:$(CPPS_DB)
 	mv obj/deps.tmp obj/deps
 -include obj/deps
 
-unit_test : $(OBJS_UNIT)
-#	$(CC)   -o $@ $^ $(LDFLAGS) $(LIBS)
+rundb : $(OBJS_DB)
 	$(CC) -o $@ $^ $(LDFLAGS) $(LIBS)
+#	$(CC) -o $@ $^ $(LDFLAGS) $(LIBS)
 ./obj/%.o: transport/%.cpp
-#	$(CC)   -c $(CFLAGS) $(INCLUDE) $(LIBS) -o $@ $<
 	$(CC) -c $(CFLAGS) $(INCLUDE) $(LIBS) -o $@ $<
-./obj/%.o: unit_tests/%.cpp
-	$(CC) -c $(CFLAGS) $(INCLUDE) -o $@ $<
+#	$(CC) -c $(CFLAGS) $(INCLUDE) $(LIBS) -o $@ $<
+#./deps/%.d: %.cpp
+#	$(CC) -MM -MT $*.o -MF $@ $(CFLAGS) $<
 ./obj/%.o: benchmarks/%.cpp
 	$(CC) -c $(CFLAGS) $(INCLUDE) -o $@ $<
 ./obj/%.o: storage/%.cpp
 	$(CC) -c $(CFLAGS) $(INCLUDE) -o $@ $<
 ./obj/%.o: system/%.cpp
-	$(CC) -c -DSTATS_ENABLE=false $(CFLAGS) $(INCLUDE) -o $@ $<
+	$(CC) -c $(CFLAGS) $(INCLUDE) -o $@ $<
+./obj/%.o: statistics/%.cpp
+	$(CC) -c $(CFLAGS) $(INCLUDE) -o $@ $<
 ./obj/%.o: concurrency_control/%.cpp
 	$(CC) -c $(CFLAGS) $(INCLUDE) -o $@ $<
 ./obj/%.o: client/%.cpp
@@ -64,8 +66,7 @@ unit_test : $(OBJS_UNIT)
 ./obj/%.o: %.cpp
 	$(CC) -c $(CFLAGS) $(INCLUDE) -o $@ $<
 
-
-rundb : $(OBJS_DB)
+runst : $(OBJS_ST)
 	$(CC) -o $@ $^ $(LDFLAGS) $(LIBS)
 #	$(CC) -o $@ $^ $(LDFLAGS) $(LIBS)
 ./obj/%.o: transport/%.cpp
@@ -114,4 +115,4 @@ runcl : $(OBJS_CL)
 
 .PHONY: clean
 clean:
-	rm -f obj/*.o obj/.depend rundb runcl runsq unit_test
+	rm -f obj/*.o obj/.depend rundb runcl runst unit_test

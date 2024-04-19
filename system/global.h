@@ -171,6 +171,17 @@ extern UInt32 g_clients_per_server;
 extern UInt32 g_server_start_node;
 
 /******************************************/
+// Storage Global Params
+/******************************************/
+extern UInt32 g_storage_node_cnt;
+extern UInt32 g_storage_thread_cnt;
+extern UInt32 g_storage_rem_thread_cnt;
+extern UInt32 g_storage_send_thread_cnt;
+extern bool g_storage_all_in_one;
+extern UInt32 g_storage_log_node_cnt;
+extern UInt32 g_storage_log_thread_cnt;
+
+/******************************************/
 // Global Parameter
 /******************************************/
 extern volatile UInt64 g_row_id;
@@ -185,6 +196,7 @@ extern UInt32 g_core_cnt;
 extern UInt32 g_total_node_cnt;
 extern UInt32 g_total_thread_cnt;
 extern UInt32 g_total_client_thread_cnt;
+extern UInt32 g_total_storage_thread_cnt;
 extern UInt32 g_this_thread_cnt;
 extern UInt32 g_this_rem_thread_cnt;
 extern UInt32 g_stats_per_interval_thread_cnt;
@@ -398,6 +410,8 @@ enum TsType {R_REQ = 0, W_REQ, P_REQ, XP_REQ};
 #define ISSERVER (g_node_id < g_node_cnt)
 #define ISSERVERN(id) (id < g_node_cnt)
 #define ISCLIENT (g_node_id >= g_node_cnt && g_node_id < g_node_cnt + g_client_node_cnt)
+#define ISSTORAGE (g_node_id >= g_node_cnt + g_client_node_cnt && g_node_id < g_node_cnt + g_client_node_cnt + g_storage_node_cnt)
+#define ISSTORAGEN(id) (id >= g_node_cnt + g_client_node_cnt && id < g_node_cnt + g_client_node_cnt + g_storage_node_cnt)
 #define ISREPLICA                                 \
   (g_node_id >= g_node_cnt + g_client_node_cnt && \
    g_node_id < g_node_cnt + g_client_node_cnt + g_repl_cnt * g_node_cnt)

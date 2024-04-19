@@ -5,6 +5,7 @@ figs*
 *ifconfig.txt
 rundb
 runcl
+runst
 .vscode/*
 obj/*
 gnuplot-5.2.8/
