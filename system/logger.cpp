@@ -1,6 +1,7 @@
 #include "logger.h"
 #include "work_queue.h"
 #include "message.h"
+#include "msg_queue.h"
 #include "mem_alloc.h"
 #include <fstream>
 
@@ -28,6 +29,7 @@ void Logger::release() {
   txn_file.close();
 }
 
+//[ ]:检查，怎么好像只存了被修改的数据项，但没有存对应的值
 LogRecord* Logger::createRecord(uint64_t txn_id, LogIUD iud, uint64_t table_id, uint64_t key) {
   LogRecord * record = (LogRecord*)mem_allocator.alloc(sizeof(LogRecord));
   record->rcd.init();
@@ -98,7 +100,8 @@ void Logger::processRecord(uint64_t thd_id, uint64_t id) {
       }
       if (record->rcd.iud == L_COMMIT) {
         if (IS_LOCAL(record->rcd.txn_id)) {
-          work_queue.enqueue(thd_id,Message::create_message(record->rcd.txn_id,LOG_FLUSHED),false);
+          // To simplify, we specifies node 0 as the rw node
+          msg_queue.enqueue(thd_id,Message::create_message(record->rcd.txn_id,LOG_FLUSHED),0);
         }
       }
     }
