@@ -8,21 +8,21 @@
 void Logger::init(const char * log_file_name, const char * txn_file_name) {
   this->log_file_name = log_file_name;
   this->txn_file_name = txn_file_name;
-  log_file = new std::ofstream[g_logger_thread_cnt];
-  for (uint64_t i = 0; i < g_logger_thread_cnt; i++) {
+  log_file = new std::ofstream[g_storage_log_thread_cnt];
+  for (uint64_t i = 0; i < g_storage_log_thread_cnt; i++) {
     log_file[i].open(std::string(log_file_name) + "_" + std::to_string(i), ios::out | ios::app | ios::binary);
     assert(log_file[i].is_open());
   }
   txn_file.open(txn_file_name, ios::out | ios::app | ios::binary);
   assert(txn_file.is_open());
-  log_queue = new boost::lockfree::queue<LogRecord *> *[g_logger_thread_cnt];
-  for (uint64_t i = 0; i < g_logger_thread_cnt; i++) {
+  log_queue = new boost::lockfree::queue<LogRecord *> *[g_storage_log_thread_cnt];
+  for (uint64_t i = 0; i < g_storage_log_thread_cnt; i++) {
     log_queue[i] = new boost::lockfree::queue<LogRecord *> (0);
   }
 }
 
 void Logger::release() {
-  for (uint64_t i = 0; i < g_logger_thread_cnt; i++) {
+  for (uint64_t i = 0; i < g_storage_log_thread_cnt; i++) {
     log_file[i].close();
   }
   txn_file.close();
@@ -74,7 +74,7 @@ void LogRecord::copyRecord(LogRecord* record) {
 
 void Logger::enqueueRecord(LogRecord* record) {
   DEBUG("Enqueue Log Record %ld\n",record->rcd.txn_id);
-  uint64_t id = record->rcd.txn_id % g_logger_thread_cnt;
+  uint64_t id = record->rcd.txn_id % g_storage_log_thread_cnt;
   log_queue[id]->push(record);
 }
 

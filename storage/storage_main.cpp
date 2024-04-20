@@ -21,7 +21,7 @@ int main(int argc, char *argv[]) {
     printf("Running storage...\n\n");
     // 0. initialize global data structure
     parser(argc, argv);
-    assert(g_node_id < g_node_cnt + g_client_node_cnt + g_storage_node_cnt);
+    assert(g_node_id >= g_node_cnt + g_client_node_cnt && g_node_id < g_node_cnt + g_client_node_cnt + g_storage_node_cnt);
 #if SEED != 0
 	uint64_t seed = SEED + g_node_id;
 #else
@@ -47,6 +47,12 @@ int main(int argc, char *argv[]) {
     simulation = new SimManager;
     simulation->init();
     printf("Done\n");
+    if (g_storage_all_in_one || g_node_id < g_node_cnt + g_client_node_cnt + g_storage_log_node_cnt) {
+        printf("Initializing logger... ");
+        fflush(stdout);
+        logger.init("logfile.log", "txnfile.log");
+        printf("Done\n");
+    }
     Workload * m_wl;
     if (g_node_id >= g_node_cnt + g_client_node_cnt + g_storage_log_node_cnt) {
         printf("Initializing storage manager... ");
@@ -176,7 +182,7 @@ int main(int argc, char *argv[]) {
     if (STATS_ENABLE) stats.print_storage(false);
     printf("\n");
     fflush(stdout);
-    // [ ]: 写磁盘版本的数据清理
+    // [ ]: 写磁盘版本的数据清理，日志文件清理
     m_wl->index_delete_all();
     return 0;
 }
