@@ -84,6 +84,8 @@ RC InputThread::run() {
 
 	if(ISCLIENT) {
 		client_recv_loop();
+	} else if (ISSTORAGE) {
+		storage_recv_loop();
 	} else {
 		server_recv_loop();
 	}
@@ -260,6 +262,35 @@ RC InputThread::server_recv_loop() {
 		delete msgs;
 		INC_STATS(_thd_id,mtx[29], get_sys_clock() - starttime);
 
+	}
+	printf("FINISH %ld:%ld\n",_node_id,_thd_id);
+	fflush(stdout);
+	return FINISH;
+}
+
+RC InputThread::storage_recv_loop() {
+	std::vector<Message*> * msgs;
+	while (!simulation->is_done()) {
+		heartbeat();
+		msgs = tport_man.recv_msg(get_thd_id());
+		
+		if (msgs == NULL) continue;
+		while(!msgs->empty()) {
+			Message * msg = msgs->front();
+			if (msg->rtype == INIT_DONE) {
+					msgs->erase(msgs->begin());
+					continue;
+			} else if (msg->rtype == LOG_MSG) {
+					LogRecord * record = new LogRecord();
+					((LogMessage*)msg)->record.copyRecord(record);
+					logger.enqueueRecord(record);
+					mem_allocator.free(msg,sizeof(LogMessage));
+			} else {
+					assert(false);
+			}
+			msgs->erase(msgs->begin());
+		}
+		delete msgs;
 	}
 	printf("FINISH %ld:%ld\n",_node_id,_thd_id);
 	fflush(stdout);

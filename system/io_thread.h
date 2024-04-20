@@ -27,6 +27,7 @@ public:
 	RC 			run();
   RC  client_recv_loop();
   RC  server_recv_loop();
+  RC  storage_recv_loop();
   void  check_for_init_done();
   void setup();
 
