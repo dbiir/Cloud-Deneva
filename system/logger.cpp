@@ -29,21 +29,24 @@ void Logger::release() {
   txn_file.close();
 }
 
-//[ ]:检查，怎么好像只存了被修改的数据项，但没有存对应的值
-LogRecord* Logger::createRecord(uint64_t txn_id, LogIUD iud, uint64_t table_id, uint64_t key) {
-  LogRecord * record = (LogRecord*)mem_allocator.alloc(sizeof(LogRecord));
+LogRecord* Logger::createRecord(uint64_t txn_id, LogIUD iud, uint64_t table_id, uint64_t key, uint64_t start_field_id, uint64_t image_size, void * before_image, void * after_image) {
+  LogRecord * record = (LogRecord*)mem_allocator.alloc(sizeof(LogRecord) + 2*image_size - 1);
   record->rcd.init();
   record->rcd.lsn = ATOM_FETCH_ADD(lsn,1);
   record->rcd.iud = iud;
   record->rcd.txn_id = txn_id;
   record->rcd.table_id = table_id;
   record->rcd.key = key;
+  record->rcd.start_feild_id = start_field_id;
+  record->rcd.image_size = image_size;
+  memcpy(record->rcd.before_and_after_image, before_image, image_size);
+  memcpy(record->rcd.before_and_after_image + image_size, after_image, image_size);
   return record;
 }
 
 #if CC_ALG == HDCC
 LogRecord* Logger::createRecord(uint64_t txn_id, LogIUD iud, uint64_t table_id, uint64_t key,
-                                uint64_t max_calvin_tid) {
+                                uint64_t max_calvin_tid, uint64_t start_field_id, uint64_t image_size, void * before_image, void * after_image) {
   LogRecord * record = (LogRecord*)mem_allocator.alloc(sizeof(LogRecord));
   record->rcd.init();
   record->rcd.lsn = ATOM_FETCH_ADD(lsn,1);
@@ -52,6 +55,9 @@ LogRecord* Logger::createRecord(uint64_t txn_id, LogIUD iud, uint64_t table_id, 
   record->rcd.table_id = table_id;
   record->rcd.key = key;
   record->rcd.max_calvin_tid = max_calvin_tid;
+  record->rcd.start_feild_id = start_field_id;
+  record->rcd.image_size = image_size;
+  memcpy(record->rcd.before_and_after_image, before_and_after_image, 2 * image_size);
   return record;
 }
 #endif

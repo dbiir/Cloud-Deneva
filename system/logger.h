@@ -55,6 +55,9 @@ struct AriesLogRecord {
 #if CC_ALG == HDCC
     max_calvin_tid = UINT64_MAX;
 #endif
+    start_feild_id = UINT64_MAX;
+    image_size = 0;
+    before_and_after_image[0] = '\0';
   }
 
   uint32_t checksum;
@@ -62,23 +65,15 @@ struct AriesLogRecord {
   LogRecType type;
   LogIUD iud;
   uint64_t txn_id; // transaction id
-  //uint32_t partid; // partition id
-  uint32_t table_id; // table being updated
-  uint64_t key; // primary key (determines the partition ID)
 #if CC_ALG == HDCC
   uint64_t max_calvin_tid;
 #endif
-  // TODO: column list
-
-  /*lsn
-  uint32_t n_cols; //how many columns are being updated
-  uint32_t* cols; //ids of modified columns
-  uint32_t before_image_size;
-  char * before_image; // data buffer for before image
-  uint32_t after_image_size;
-  char * after_image; // data buffer for after image
-  */
-
+  //uint32_t partid; // partition id
+  uint32_t table_id; // table being updated
+  uint64_t key; // primary key (determines the partition ID)
+  uint64_t start_feild_id;
+  uint64_t image_size;
+  char before_and_after_image[1]; // varible size, always at the end of the struct
 };
 
 class LogRecord {
@@ -110,9 +105,9 @@ public:
     //LogRecType type,
       uint64_t txn_id, LogIUD iud,
     //uint64_t partid,
-      uint64_t table_id, uint64_t key);
+      uint64_t table_id, uint64_t key, uint64_t start_field_id, uint64_t image_size, void * before_image, void * after_image);
 #if CC_ALG == HDCC
-  LogRecord * createRecord(uint64_t txn_id,LogIUD iud,uint64_t table_id,uint64_t key,uint64_t max_calvin_tid);
+  LogRecord * createRecord(uint64_t txn_id,LogIUD iud,uint64_t table_id,uint64_t key,uint64_t max_calvin_tid, uint64_t start_field_id, uint64_t image_size, void * before_image, void * after_image);
 #endif
   void enqueueRecord(LogRecord* record);
   void processRecord(uint64_t thd_id,uint64_t id);
