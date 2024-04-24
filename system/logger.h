@@ -45,7 +45,6 @@ struct CmdLogRecord {
 // ARIES-style log record (physiological logging)
 struct AriesLogRecord {
   void init() {
-    checksum = 0;
     lsn = UINT64_MAX;
     type = LRT_UPDATE;
     iud = L_UPDATE;
@@ -60,7 +59,6 @@ struct AriesLogRecord {
     before_and_after_image[0] = '\0';
   }
 
-  uint32_t checksum;
   uint64_t lsn;
   LogRecType type;
   LogIUD iud;
@@ -88,11 +86,9 @@ public:
 #if LOG_COMMAND
   CmdLogRecord rcd;
 #else
-  AriesLogRecord rcd;
+  uint32_t image_pointer;
+  AriesLogRecord rcd; // varible size, always at the end of the class
 #endif
-private:
-  bool isValid;
-
 };
 
 class Logger {
@@ -106,9 +102,12 @@ public:
       uint64_t txn_id, LogIUD iud,
     //uint64_t partid,
       uint64_t table_id, uint64_t key, uint64_t start_field_id, uint64_t image_size, void * before_image, void * after_image);
+  LogRecord * createRecord(uint64_t txn_id, LogIUD iud, uint64_t table_id, uint64_t key, uint64_t start_field_id, uint64_t image_size);
 #if CC_ALG == HDCC
   LogRecord * createRecord(uint64_t txn_id,LogIUD iud,uint64_t table_id,uint64_t key,uint64_t max_calvin_tid, uint64_t start_field_id, uint64_t image_size, void * before_image, void * after_image);
+  LogRecord * createRecord(uint64_t txn_id,LogIUD iud,uint64_t table_id,uint64_t key,uint64_t max_calvin_tid, uint64_t start_field_id, uint64_t image_size);
 #endif
+  void copyValue(LogRecord * record, void * value, uint64_t size);
   void enqueueRecord(LogRecord* record);
   void processRecord(uint64_t thd_id,uint64_t id);
   void writeToBuffer(uint64_t thd_id,char * data, uint64_t size);

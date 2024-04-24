@@ -369,6 +369,11 @@ protected:
 
 	sem_t rsp_mutex;
 	bool registed_;
+
+#if SINGLE_WRITE_NODE
+	vector<LogRecord *> log_records;
+#endif
+
 #if CC_ALG == SILO
 	bool 			_pre_abort;
 	bool 			_validation_no_wait;

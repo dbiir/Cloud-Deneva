@@ -370,6 +370,7 @@ RC YCSBTxnManager::run_ycsb_0(ycsb_request * req,row_t *& row_local) {
 
 }
 
+// [ ]:因为目前YCSB的写入并没有用req中的随机值而是写了固定值0，日志里也暂时写成固定值了
 RC YCSBTxnManager::run_ycsb_1(access_t acctype, row_t * row_local) {
   uint64_t starttime = get_sys_clock();
   if (acctype == RD || acctype == SCAN) {
@@ -401,6 +402,15 @@ RC YCSBTxnManager::run_ycsb_1(access_t acctype, row_t * row_local) {
 #if ISOLATION_LEVEL == READ_UNCOMMITTED
     // Release lock after write
     release_last_row_lock();
+#endif
+#if SINGLE_WRITE_NODE
+#if YCSB_SHORT_LOG
+    char for_log = 0;
+    LogRecord * log_record = logger.createRecord(get_txn_id(), L_UPDATE, row_local->get_table()->get_table_id(), row_local->get_primary_key(), fid, 1, &for_log, &for_log);
+#else
+    LogRecord * log_record = logger.createRecord(get_txn_id(), L_UPDATE, row_local->get_table()->get_table_id(), row_local->get_primary_key(), fid, 100, data, data);
+#endif
+    log_records.push_back(log_record);
 #endif
   }
   INC_STATS(get_thd_id(),trans_benchmark_compute_time,get_sys_clock() - starttime);

@@ -31,6 +31,7 @@ void Logger::release() {
 
 LogRecord* Logger::createRecord(uint64_t txn_id, LogIUD iud, uint64_t table_id, uint64_t key, uint64_t start_field_id, uint64_t image_size, void * before_image, void * after_image) {
   LogRecord * record = (LogRecord*)mem_allocator.alloc(sizeof(LogRecord) + 2*image_size - 1);
+  record->image_pointer = 0;
   record->rcd.init();
   record->rcd.lsn = ATOM_FETCH_ADD(lsn,1);
   record->rcd.iud = iud;
@@ -44,10 +45,31 @@ LogRecord* Logger::createRecord(uint64_t txn_id, LogIUD iud, uint64_t table_id, 
   return record;
 }
 
+LogRecord* Logger::createRecord(uint64_t txn_id, LogIUD iud, uint64_t table_id, uint64_t key, uint64_t start_field_id, uint64_t image_size) {
+  LogRecord * record = (LogRecord*)mem_allocator.alloc(sizeof(LogRecord) + 2*image_size - 1);
+  record->image_pointer = 0;
+  record->rcd.init();
+  record->rcd.lsn = ATOM_FETCH_ADD(lsn,1);
+  record->rcd.iud = iud;
+  record->rcd.txn_id = txn_id;
+  record->rcd.table_id = table_id;
+  record->rcd.key = key;
+  record->rcd.start_feild_id = start_field_id;
+  record->rcd.image_size = image_size;
+  return record;
+}
+
+void Logger::copyValue(LogRecord * record, void * value, uint64_t size) {
+  assert(record->image_pointer + size <= record->rcd.image_size*2);
+  memcpy((char *)record->rcd.before_and_after_image + record->image_pointer, value, size);
+  record->image_pointer += size;
+}
+
 #if CC_ALG == HDCC
 LogRecord* Logger::createRecord(uint64_t txn_id, LogIUD iud, uint64_t table_id, uint64_t key,
                                 uint64_t max_calvin_tid, uint64_t start_field_id, uint64_t image_size, void * before_image, void * after_image) {
   LogRecord * record = (LogRecord*)mem_allocator.alloc(sizeof(LogRecord));
+  record->image_pointer = 0;
   record->rcd.init();
   record->rcd.lsn = ATOM_FETCH_ADD(lsn,1);
   record->rcd.iud = iud;
@@ -57,7 +79,24 @@ LogRecord* Logger::createRecord(uint64_t txn_id, LogIUD iud, uint64_t table_id, 
   record->rcd.max_calvin_tid = max_calvin_tid;
   record->rcd.start_feild_id = start_field_id;
   record->rcd.image_size = image_size;
-  memcpy(record->rcd.before_and_after_image, before_and_after_image, 2 * image_size);
+  memcpy(record->rcd.before_and_after_image, before_image, image_size);
+  memcpy(record->rcd.before_and_after_image, after_image, image_size);
+  return record;
+}
+
+LogRecord* Logger::createRecord(uint64_t txn_id, LogIUD iud, uint64_t table_id, uint64_t key,
+                                uint64_t max_calvin_tid, uint64_t start_field_id, uint64_t image_size) {
+  LogRecord * record = (LogRecord*)mem_allocator.alloc(sizeof(LogRecord));
+  record->image_pointer = 0;
+  record->rcd.init();
+  record->rcd.lsn = ATOM_FETCH_ADD(lsn,1);
+  record->rcd.iud = iud;
+  record->rcd.txn_id = txn_id;
+  record->rcd.table_id = table_id;
+  record->rcd.key = key;
+  record->rcd.max_calvin_tid = max_calvin_tid;
+  record->rcd.start_feild_id = start_field_id;
+  record->rcd.image_size = image_size;
   return record;
 }
 #endif
@@ -157,7 +196,6 @@ void Logger::writeToBuffer(uint64_t thd_id, LogRecord * record, uint64_t id) {
 
 #else
 
-  WRITE_VAL(log_file[id],record->rcd.checksum);
   WRITE_VAL(log_file[id],record->rcd.lsn);
   WRITE_VAL(log_file[id],record->rcd.type);
   WRITE_VAL(log_file[id],record->rcd.iud);

@@ -43,6 +43,8 @@
 
 // ! Parameters used to locate distributed performance bottlenecks.
 
+#define SINGLE_WRITE_NODE true // Only one node writes data
+
 #define SECOND 130 // Set the queue monitoring time.
 // #define THD_ID_QUEUE
 #define ONE_NODE_RECIEVE 0 // only node 0 will receive the txn query
@@ -250,12 +252,15 @@
 /***********************************************/
 // Logging
 /***********************************************/
+// Unused, for original deneva system record the log
 #define LOG_COMMAND         false
 #define LOG_REDO          false
 #define LOGGING false
 #define SYNCHRONIZATION false
 #define LOG_BUF_MAX 10
 #define LOG_BUF_TIMEOUT 10 * 1000000UL // 10ms
+// New config
+#define YCSB_SHORT_LOG true
 
 /***********************************************/
 // Benchmark

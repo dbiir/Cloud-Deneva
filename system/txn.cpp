@@ -397,6 +397,10 @@ void TxnManager::init(uint64_t thd_id, Workload * h_wl) {
 	txn_ready = true;
 	twopl_wait_start = 0;
 
+#if SINGLE_WRITE_NODE
+	log_records = std::vector<LogRecord *>();
+#endif
+
 	txn_stats.init();
 }
 
@@ -469,6 +473,10 @@ void TxnManager::reset() {
 
 	// Stats
 	txn_stats.reset();
+
+#if SINGLE_WRITE_NODE
+	log_records.clear();
+#endif
 }
 
 void TxnManager::release() {
@@ -517,6 +525,13 @@ void TxnManager::release() {
 	last_lock_ts = 0;
 #endif
 	txn_ready = true;
+
+#if SINGLE_WRITE_NODE
+	//free memory in logRecords
+	for (uint64_t i = 0; i < log_records.size(); i++) {
+		mem_allocator.free(log_records[i], sizeof(LogRecord) + 2 * log_records[i]->rcd.image_size - 1);
+	}
+#endif
 }
 
 void TxnManager::reset_query() {

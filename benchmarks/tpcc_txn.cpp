@@ -677,7 +677,12 @@ inline RC TPCCTxnManager::run_payment_1(uint64_t w_id, uint64_t d_id, uint64_t d
 	}
 #endif
 	if (g_wh_update) {
-		r_wh_local->set_value(W_YTD, w_ytd + h_amount);
+		double update_value = w_ytd + h_amount;
+		r_wh_local->set_value(W_YTD, update_value);
+#if SINGLE_WRITE_NODE
+		LogRecord * log_record = logger.createRecord(get_txn_id(), L_UPDATE, r_wh_local->get_table()->get_table_id(), r_wh_local->get_primary_key(), W_YTD, 8, &w_ytd, &update_value);
+		log_records.push_back(log_record);
+#endif
 	}
 #if CC_ALG == HDCC
 	if (algo == CALVIN) {
@@ -724,12 +729,17 @@ inline RC TPCCTxnManager::run_payment_3(uint64_t w_id, uint64_t d_id, uint64_t d
 		row->manager->isIntermediateState = true;
 	}
 #endif
-	r_dist_local->set_value(D_YTD, d_ytd + h_amount);
+	double update_value = d_ytd + h_amount;
+	r_dist_local->set_value(D_YTD, update_value);
 #if CC_ALG == HDCC
 	if (algo == CALVIN) {
 		row->manager->_tid = txn->txn_id;
 		row->manager->isIntermediateState = false;
 	}
+#endif
+#if SINGLE_WRITE_NODE
+	LogRecord * log_record = logger.createRecord(get_txn_id(), L_UPDATE, r_dist_local->get_table()->get_table_id(), r_dist_local->get_primary_key(), W_YTD, 8, &d_ytd, &update_value);
+	log_records.push_back(log_record);
 #endif
 	INC_STATS(get_thd_id(),trans_benchmark_compute_time,get_sys_clock() - starttime);
 	return RCOK;
@@ -832,11 +842,25 @@ inline RC TPCCTxnManager::run_payment_5(uint64_t w_id, uint64_t d_id, uint64_t c
 	double c_payment_cnt;
 
 	r_cust_local->get_value(C_BALANCE, c_balance);
-	r_cust_local->set_value(C_BALANCE, c_balance - h_amount);
+	double new_balance = c_balance - h_amount;
+	r_cust_local->set_value(C_BALANCE, new_balance);
 	r_cust_local->get_value(C_YTD_PAYMENT, c_ytd_payment);
-	r_cust_local->set_value(C_YTD_PAYMENT, c_ytd_payment + h_amount);
+	double new_ytd = c_ytd_payment + h_amount;
+	r_cust_local->set_value(C_YTD_PAYMENT, new_ytd);
 	r_cust_local->get_value(C_PAYMENT_CNT, c_payment_cnt);
-	r_cust_local->set_value(C_PAYMENT_CNT, c_payment_cnt + 1);
+	double new_payment_cnt = c_payment_cnt + 1;
+	r_cust_local->set_value(C_PAYMENT_CNT, new_payment_cnt);
+
+#if SINGLE_WRITE_NODE
+	LogRecord * log_record = logger.createRecord(get_txn_id(), L_UPDATE, r_cust_local->get_table()->get_table_id(), r_cust_local->get_primary_key(), C_BALANCE, 24);
+	logger.copyValue(log_record, &c_balance, sizeof(double));
+	logger.copyValue(log_record, &c_ytd_payment, sizeof(double));
+	logger.copyValue(log_record, &c_payment_cnt, sizeof(double));
+	logger.copyValue(log_record, &new_balance, sizeof(double));
+	logger.copyValue(log_record, &new_ytd, sizeof(double));
+	logger.copyValue(log_record, &new_payment_cnt, sizeof(double));
+	log_records.push_back(log_record);
+#endif
 
 	//char * c_credit = r_cust_local->get_value(C_CREDIT);
 
@@ -863,6 +887,11 @@ inline RC TPCCTxnManager::run_payment_5(uint64_t w_id, uint64_t d_id, uint64_t c
 		row->manager->_tid = txn->txn_id;
 		row->manager->isIntermediateState = false;
 	}
+#endif
+#if SINGLE_WRITE_NODE
+	LogRecord * log_record2 = logger.createRecord(get_txn_id(), L_INSERT, _wl->t_history->get_table_id(), row_id, H_C_ID, 56);
+	logger.copyValue(log_record2, r_hist->get_data(), 6 * sizeof(int64_t) + sizeof(double));
+	log_records.push_back(log_record2);
 #endif
 	INC_STATS(get_thd_id(),trans_benchmark_compute_time,get_sys_clock() - starttime);
 	return RCOK;
@@ -970,8 +999,13 @@ inline RC TPCCTxnManager::new_order_5(uint64_t w_id, uint64_t d_id, uint64_t c_i
 	//int64_t o_id;
 	//d_tax = *(double *) r_dist_local->get_value(D_TAX);
 	*o_id = *(int64_t *) r_dist_local->get_value(D_NEXT_O_ID);
-	(*o_id) ++;
-	r_dist_local->set_value(D_NEXT_O_ID, *o_id);
+	int64_t new_o_id = (*o_id) + 1;
+	// (*o_id) ++;
+	r_dist_local->set_value(D_NEXT_O_ID, new_o_id);
+#if SINGLE_WRITE_NODE
+	LogRecord * log_record = logger.createRecord(get_txn_id(), L_UPDATE, r_dist_local->get_table()->get_table_id(), r_dist_local->get_primary_key(), D_NEXT_O_ID, 8, o_id, &new_o_id);
+	log_records.push_back(log_record);
+#endif
 
 	// return o_id
 	/*========================================================================================+
@@ -990,6 +1024,13 @@ inline RC TPCCTxnManager::new_order_5(uint64_t w_id, uint64_t d_id, uint64_t c_i
 	int64_t all_local = (remote? 0 : 1);
 	r_order->set_value(O_ALL_LOCAL, all_local);
 	insert_row(r_order, _wl->t_order);
+
+#if SINGLE_WRITE_NODE
+	LogRecord * log_record2 = logger.createRecord(get_txn_id(), L_INSERT, _wl->t_order->get_table_id(), row_id, O_ID, 64);
+	logger.copyValue(log_record2, r_order->get_data(), 8 * sizeof(int64_t));
+	log_records.push_back(log_record2);
+#endif
+
 	/*=======================================================+
 		EXEC SQL INSERT INTO NEW_ORDER (no_o_id, no_d_id, no_w_id)
 				VALUES (:o_id, :d_id, :w_id);
@@ -1000,6 +1041,13 @@ inline RC TPCCTxnManager::new_order_5(uint64_t w_id, uint64_t d_id, uint64_t c_i
 	r_no->set_value(NO_D_ID, d_id);
 	r_no->set_value(NO_W_ID, w_id);
 	insert_row(r_no, _wl->t_neworder);
+
+#if SINGLE_WRITE_NODE
+	LogRecord * log_record3 = logger.createRecord(get_txn_id(), L_INSERT, _wl->t_neworder->get_table_id(), row_id, NO_O_ID, 24);
+	logger.copyValue(log_record3, r_no->get_data(), 3 * sizeof(int64_t));
+	log_records.push_back(log_record3);
+#endif
+
 #if CC_ALG == HDCC
 	if (algo == CALVIN) {
 		row->manager->_tid = txn->txn_id;
@@ -1098,16 +1146,21 @@ inline RC TPCCTxnManager::new_order_9(uint64_t w_id, uint64_t d_id, bool remote,
 	int64_t s_order_cnt;
 	char * s_data __attribute__ ((unused));
 	r_stock_local->get_value(S_YTD, s_ytd);
-	r_stock_local->set_value(S_YTD, s_ytd + ol_quantity);
+	int64_t new_ytd = s_ytd + ol_quantity;
+	r_stock_local->set_value(S_YTD, new_ytd);
 	// In Coordination Avoidance, this record must be protected!
 	r_stock_local->get_value(S_ORDER_CNT, s_order_cnt);
-	r_stock_local->set_value(S_ORDER_CNT, s_order_cnt + 1);
+	int64_t new_order_cnt = s_order_cnt + 1;
+	r_stock_local->set_value(S_ORDER_CNT, new_order_cnt);
 	s_data = r_stock_local->get_value(S_DATA);
 #endif
+	s_remote_cnt = *(int64_t*)r_stock_local->get_value(S_REMOTE_CNT);
+	int64_t new_remote_cnt;
 	if (remote) {
-		s_remote_cnt = *(int64_t*)r_stock_local->get_value(S_REMOTE_CNT);
-		s_remote_cnt ++;
-		r_stock_local->set_value(S_REMOTE_CNT, &s_remote_cnt);
+		new_remote_cnt = s_remote_cnt + 1;
+		r_stock_local->set_value(S_REMOTE_CNT, &new_remote_cnt);
+	} else {
+		new_remote_cnt = s_remote_cnt;
 	}
 	uint64_t quantity;
 	if (s_quantity > ol_quantity + 10) {
@@ -1116,6 +1169,19 @@ inline RC TPCCTxnManager::new_order_9(uint64_t w_id, uint64_t d_id, bool remote,
 		quantity = s_quantity - ol_quantity + 91;
 	}
 	r_stock_local->set_value(S_QUANTITY, &quantity);
+
+#if SINGLE_WRITE_NODE
+	LogRecord * log_record = logger.createRecord(get_txn_id(), L_UPDATE, r_stock_local->get_table()->get_table_id(), r_stock_local->get_primary_key(), S_YTD, 24);
+	logger.copyValue(log_record, &s_ytd, sizeof(int64_t));
+	logger.copyValue(log_record, &s_order_cnt, sizeof(int64_t));
+	logger.copyValue(log_record, &s_remote_cnt, sizeof(int64_t));
+	logger.copyValue(log_record, &new_ytd, sizeof(int64_t));
+	logger.copyValue(log_record, &new_order_cnt, sizeof(int64_t));
+	logger.copyValue(log_record, &new_remote_cnt, sizeof(int64_t));
+	log_records.push_back(log_record);
+	LogRecord * log_record2 = logger.createRecord(get_txn_id(), L_UPDATE, r_stock_local->get_table()->get_table_id(), r_stock_local->get_primary_key(), W_YTD, 8, &s_quantity, &quantity);
+	log_records.push_back(log_record2);
+#endif
 
 	/*====================================================+
 	EXEC SQL INSERT
@@ -1145,6 +1211,11 @@ inline RC TPCCTxnManager::new_order_9(uint64_t w_id, uint64_t d_id, bool remote,
 		row->manager->_tid = txn->txn_id;
 		row->manager->isIntermediateState = false;
 	}
+#endif
+#if SINGLE_WRITE_NODE
+	LogRecord * log_record3 = logger.createRecord(get_txn_id(), L_INSERT, _wl->t_orderline->get_table_id(), row_id, OL_O_ID, 72);
+	logger.copyValue(log_record3, r_ol->get_data(), 8 * sizeof(int64_t) + sizeof(double));
+	log_records.push_back(log_record3);
 #endif
 	INC_STATS(get_thd_id(),trans_benchmark_compute_time,get_sys_clock() - starttime);
 	return RCOK;
