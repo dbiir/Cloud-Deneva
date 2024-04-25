@@ -46,23 +46,34 @@ void InputThread::setup() {
 				fflush(stdout);
 				simulation->process_setup_msg();
 			} else {
-				assert(ISSERVER || ISREPLICA);
-				//printf("Received Msg %d from node %ld\n",msg->rtype,msg->return_node_id);
+				if (ISSERVER || ISREPLICA) {
+					//printf("Received Msg %d from node %ld\n",msg->rtype,msg->return_node_id);
 #if CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == SNAPPER
-			if(msg->rtype == CALVIN_ACK ||(msg->rtype == CL_QRY && ISCLIENTN(msg->get_return_id())) ||
-				(msg->rtype == CL_QRY_O && ISCLIENTN(msg->get_return_id()))) {
-				work_queue.sequencer_enqueue(get_thd_id(),msg);
-				msgs->erase(msgs->begin());
-				continue;
-			}
-			if( msg->rtype == RDONE || msg->rtype == CL_QRY || msg->rtype == CL_QRY_O) {
-				assert(ISSERVERN(msg->get_return_id()));
-				work_queue.sched_enqueue(get_thd_id(),msg);
-				msgs->erase(msgs->begin());
-				continue;
-			}
+					if(msg->rtype == CALVIN_ACK ||(msg->rtype == CL_QRY && ISCLIENTN(msg->get_return_id())) ||
+						(msg->rtype == CL_QRY_O && ISCLIENTN(msg->get_return_id()))) {
+						work_queue.sequencer_enqueue(get_thd_id(),msg);
+						msgs->erase(msgs->begin());
+						continue;
+					}
+					if( msg->rtype == RDONE || msg->rtype == CL_QRY || msg->rtype == CL_QRY_O) {
+						assert(ISSERVERN(msg->get_return_id()));
+						work_queue.sched_enqueue(get_thd_id(),msg);
+						msgs->erase(msgs->begin());
+						continue;
+					}
 #endif
-				work_queue.enqueue(get_thd_id(),msg,false);
+					work_queue.enqueue(get_thd_id(),msg,false);
+				} else {
+					if (msg->rtype == LOG_MSG) {
+					// LogRecord * record = (LogRecord*)mem_allocator.alloc(sizeof(((LogMessage*)msg)->record));
+					// record->copyRecord(&((LogMessage*)msg)->record);
+					LogRecord * record = ((LogMessage*)msg)->record;
+					logger.enqueueRecord(record);
+					delete msg;
+					} else {
+							assert(false);
+					}
+				}
 			}
 			msgs->erase(msgs->begin());
 		}
