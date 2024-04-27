@@ -65,11 +65,13 @@ void InputThread::setup() {
 					work_queue.enqueue(get_thd_id(),msg,false);
 				} else {
 					if (msg->rtype == LOG_MSG) {
-					// LogRecord * record = (LogRecord*)mem_allocator.alloc(sizeof(((LogMessage*)msg)->record));
-					// record->copyRecord(&((LogMessage*)msg)->record);
-					LogRecord * record = ((LogMessage*)msg)->record;
-					logger.enqueueRecord(record);
-					delete msg;
+						uint64_t record_cnt = ((LogMessage*)msg)->record_cnt;
+						LogRecord ** record = (LogRecord**)mem_allocator.alloc(sizeof(LogRecord*) * record_cnt);
+						for (uint64_t i = 0; i < record_cnt; i++) {
+							record[i] = ((LogMessage*)msg)->records[i];
+							logger.enqueueRecord(record[i]);
+						}
+						delete msg;
 					} else {
 							assert(false);
 					}
@@ -292,10 +294,13 @@ RC InputThread::storage_recv_loop() {
 					msgs->erase(msgs->begin());
 					continue;
 			} else if (msg->rtype == LOG_MSG) {
-					LogRecord * record = new LogRecord();
-					((LogMessage*)msg)->record.copyRecord(record);
-					logger.enqueueRecord(record);
-					mem_allocator.free(msg,sizeof(LogMessage));
+				uint64_t record_cnt = ((LogMessage*)msg)->record_cnt;
+				LogRecord ** record = (LogRecord**)mem_allocator.alloc(sizeof(LogRecord*) * record_cnt);
+				for (uint64_t i = 0; i < record_cnt; i++) {
+					record[i] = ((LogMessage*)msg)->records[i];
+					logger.enqueueRecord(record[i]);
+				}
+				delete msg;
 			} else {
 					assert(false);
 			}

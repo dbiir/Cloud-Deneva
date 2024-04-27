@@ -311,6 +311,7 @@ public:
 	////////////////////////////////
 //	void 			gen_log_entry(int &length, void * log);
 	bool log_flushed;
+	uint64_t log_flushed_cnt;
 	bool repl_finished;
 	Transaction * txn;
 	BaseQuery * query;

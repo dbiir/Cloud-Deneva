@@ -55,7 +55,7 @@ struct AriesLogRecord {
     max_calvin_tid = UINT64_MAX;
 #endif
     start_feild_id = UINT64_MAX;
-    image_size = 0;
+    image_size = 1;
     before_and_after_image[0] = '\0';
   }
 

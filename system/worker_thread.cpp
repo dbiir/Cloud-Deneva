@@ -1327,8 +1327,8 @@ RC WorkerThread::init_phase() {
 RC WorkerThread::process_log_msg(Message * msg) {
   assert(ISREPLICA);
   DEBUG("REPLICA PROCESS %ld\n",msg->get_txn_id());
-  LogRecord * record = logger.createRecord(&((LogMessage*)msg)->record);
-  logger.enqueueRecord(record);
+  // LogRecord * record = logger.createRecord(&((LogMessage*)msg)->record);
+  // logger.enqueueRecord(record);
   return RCOK;
 }
 
@@ -1341,17 +1341,22 @@ RC WorkerThread::process_log_msg_rsp(Message * msg) {
 
 RC WorkerThread::process_log_flushed(Message * msg) {
   DEBUG("LOG FLUSHED %ld\n",msg->get_txn_id());
-  if(ISREPLICA) {
-    msg_queue.enqueue(get_thd_id(), Message::create_message(msg->txn_id, LOG_MSG_RSP),
-                      GET_NODE_ID(msg->txn_id));
-    return RCOK;
-  }
-
-  txn_man->log_flushed = true;
-  if (!txn_man->is_multi_part() || txn_man->get_rsp_cnt() == 0) {
+  // if(ISREPLICA) {
+  //   msg_queue.enqueue(get_thd_id(), Message::create_message(msg->txn_id, LOG_MSG_RSP),
+  //                     GET_NODE_ID(msg->txn_id));
+  //   return RCOK;
+  // }
+  // printf("txn %ld recieve log flushed\n", msg->get_txn_id());
+  txn_man->log_flushed_cnt++;
+  if (txn_man->log_flushed_cnt == g_storage_log_node_cnt) {
+  // txn_man->log_flushed = true;
+  // if (!txn_man->is_multi_part() || txn_man->get_rsp_cnt() == 0) {
     txn_man->txn_stats.finish_start_time = get_sys_clock();
+    txn_man->commit();
     commit();
+    // printf("txn %ld commit\n", msg->get_txn_id());
   }
+  // }
   return RCOK;
 }
 

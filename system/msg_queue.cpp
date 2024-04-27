@@ -84,7 +84,7 @@ void MessageQueue::enqueue(uint64_t thd_id, Message * msg,uint64_t dest) {
 #elif WORKLOAD == DA
   uint64_t rand = 0;
 #else
-  uint64_t rand = mtx_time_start % g_this_send_thread_cnt;
+  uint64_t rand = thd_id % g_this_send_thread_cnt;
 #endif
 #if NETWORK_DELAY_TEST
   if(ISCLIENTN(dest)) {

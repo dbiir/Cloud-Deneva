@@ -34,7 +34,7 @@ public:
   static Message * create_message(TxnManager * txn, RemReqType rtype);
   static Message * create_message(uint64_t txn_id, RemReqType rtype);
   static Message * create_message(uint64_t txn_id,uint64_t batch_id, RemReqType rtype);
-  static Message * create_message(LogRecord * record, RemReqType rtype);
+  static Message * create_message(std::vector<LogRecord *> records, RemReqType rtype);
   static Message * create_message(RemReqType rtype);
   static std::vector<Message*> * create_messages(char * buf);
   static void release_message(Message * msg);
@@ -130,9 +130,12 @@ public:
   void init() {}
   void release();
   void copy_from_record(LogRecord * record);
+  void copy_from_records(std::vector<LogRecord *> records);
 
   //Array<LogRecord*> log_records;
-  LogRecord record;
+  uint64_t record_cnt;
+  uint64_t * image_size;
+  LogRecord ** records;
 };
 
 class LogRspMessage : public Message {
@@ -148,11 +151,11 @@ public:
 
 class LogFlushedMessage : public Message {
 public:
-  void copy_from_buf(char * buf) {}
-  void copy_to_buf(char * buf) {}
-  void copy_from_txn(TxnManager * txn) {}
-  void copy_to_txn(TxnManager * txn) {}
-  uint64_t get_size() {return sizeof(LogFlushedMessage);}
+  void copy_from_buf(char * buf) {Message::mcopy_from_buf(buf);}
+  void copy_to_buf(char * buf) {Message::mcopy_to_buf(buf);}
+  void copy_from_txn(TxnManager * txn) {Message::mcopy_from_txn(txn);}
+  void copy_to_txn(TxnManager * txn) {Message::mcopy_to_txn(txn);}
+  uint64_t get_size() {return Message::mget_size();}
   void init() {}
   void release() {}
 

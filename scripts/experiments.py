@@ -229,7 +229,7 @@ configs = {
     "ABORT_PENALTY": "10 * 1000000UL   // in ns.",
     "ABORT_PENALTY_MAX": "5 * 100 * 1000000UL   // in ns.",
     "MSG_TIME_LIMIT": "0",
-    "MSG_SIZE_MAX": 4096,
+    "MSG_SIZE_MAX": 8192,
     "TXN_WRITE_PERC":1.0,
     "PRIORITY":"PRIORITY_ACTIVE",
     "TWOPL_LITE":"false",

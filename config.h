@@ -165,7 +165,7 @@
 
 #define PRIORITY_WORK_QUEUE false
 #define PRIORITY PRIORITY_ACTIVE
-#define MSG_SIZE_MAX 4096
+#define MSG_SIZE_MAX 8192
 #define MSG_TIME_LIMIT 0
 
 /***********************************************/

@@ -422,6 +422,7 @@ void TxnManager::reset() {
 	return_id = UINT64_MAX;
 	twopl_wait_start = 0;
 	log_flushed = false;
+	log_flushed_cnt = 0;
 
 	//ready = true;
 
@@ -640,6 +641,10 @@ RC TxnManager::abort() {
 	}
 #endif
 #endif
+	for (uint64_t i = 0; i < log_records.size(); i++) {
+		mem_allocator.free(log_records[i], sizeof(LogRecord) + 2 * log_records[i]->rcd.image_size - 1);
+	}
+	log_records.clear();
 	/*
 	// latency from most recent start or restart of transaction
 	PRINT_LATENCY("lat_s %ld %ld 0 %f %f %f %f %f %f 0.0\n"
@@ -777,9 +782,17 @@ RC TxnManager::start_commit() {
 		if(CC_ALG == WSI) {
 			wsi_man.gene_finish_ts(this);
 		}
-		if(rc == RCOK)
-			rc = commit();
-		else {
+		if(rc == RCOK) {
+#if SINGLE_WRITE_NODE
+			log_records.push_back(logger.createRecord(get_txn_id(),L_COMMIT,0,0,0,0));
+			for (uint64_t j = 0; j < g_storage_log_node_cnt; j++) {
+				Message * msg = Message::create_message(log_records, LOG_MSG);
+				msg_queue.enqueue(get_thd_id(), msg, g_node_cnt + g_client_node_cnt + j);
+			}
+			rc = WAIT_REM;
+#endif
+			// rc = commit();
+		} else {
 			txn->rc = Abort;
 			DEBUG("%ld start_abort\n",get_txn_id());
 			//TODO: the size cannot bigger than 1

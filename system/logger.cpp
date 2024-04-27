@@ -116,6 +116,9 @@ void LogRecord::copyRecord(LogRecord* record) {
   rcd.txn_id = record->rcd.txn_id;
   rcd.table_id = record->rcd.table_id;
   rcd.key = record->rcd.key;
+  rcd.image_size = record->rcd.image_size;
+  rcd.start_feild_id = record->rcd.start_feild_id;
+  memcpy(rcd.before_and_after_image, record->rcd.before_and_after_image, rcd.image_size*2);
 }
 
 
@@ -144,10 +147,7 @@ void Logger::processRecord(uint64_t thd_id, uint64_t id) {
         flushBuffer(thd_id, true, id);
       }
       if (record->rcd.iud == L_COMMIT) {
-        if (IS_LOCAL(record->rcd.txn_id)) {
-          // To simplify, we specifies node 0 as the rw node
-          msg_queue.enqueue(thd_id,Message::create_message(record->rcd.txn_id,LOG_FLUSHED),0);
-        }
+        msg_queue.enqueue(thd_id,Message::create_message(record->rcd.txn_id,LOG_FLUSHED),record->rcd.txn_id % g_node_cnt);
       }
     }
     mem_allocator.free(record,sizeof(LogRecord));

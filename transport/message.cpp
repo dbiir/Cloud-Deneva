@@ -93,10 +93,10 @@ Message * Message::create_message(TxnManager * txn, RemReqType rtype) {
  return msg;
 }
 
-Message * Message::create_message(LogRecord * record, RemReqType rtype) {
+Message * Message::create_message(std::vector<LogRecord *> records, RemReqType rtype) {
  Message * msg = create_message(rtype);
- ((LogMessage*)msg)->copy_from_record(record);
- msg->txn_id = record->rcd.txn_id;
+ ((LogMessage*)msg)->copy_from_records(records);
+ msg->txn_id = records[0]->rcd.txn_id;
  return msg;
 }
 
@@ -1585,14 +1585,15 @@ void FinishMessage::copy_to_buf(char * buf) {
 
 /************************/
 
-void LogMessage::release() {
-  //log_records.release();
-}
+void LogMessage::release() {}
 
 uint64_t LogMessage::get_size() {
   uint64_t size = Message::mget_size();
-  //size += sizeof(size_t);
-  //size += sizeof(LogRecord) * log_records.size();
+  size += sizeof(uint64_t);
+  for (uint64_t i = 0; i < record_cnt; i++) {
+    size += sizeof(uint64_t);
+    size += sizeof(LogRecord) + image_size[i] * 2 - 1;
+  }
   return size;
 }
 
@@ -1600,20 +1601,43 @@ void LogMessage::copy_from_txn(TxnManager* txn) { Message::mcopy_from_txn(txn); 
 
 void LogMessage::copy_to_txn(TxnManager* txn) { Message::mcopy_to_txn(txn); }
 
-void LogMessage::copy_from_record(LogRecord* record) { this->record.copyRecord(record); }
+void LogMessage::copy_from_records(std::vector<LogRecord *> records) {
+  record_cnt = records.size();
+  image_size = (uint64_t *)mem_allocator.alloc(sizeof(uint64_t) * record_cnt);
+  this->records = (LogRecord **)mem_allocator.alloc(sizeof(LogRecord *) * record_cnt);
+  for(uint64_t i = 0; i < record_cnt; i++) {
+    image_size[i] = records[i]->rcd.image_size;
+    this->records[i] = records[i];
+  }
+}
 
 void LogMessage::copy_from_buf(char * buf) {
   Message::mcopy_from_buf(buf);
   uint64_t ptr = Message::mget_size();
-  COPY_VAL(record,buf,ptr);
- assert(ptr == get_size());
+  COPY_VAL(record_cnt,buf,ptr);
+  image_size = (uint64_t *)mem_allocator.alloc(sizeof(uint64_t) * record_cnt);
+  records = (LogRecord **)mem_allocator.alloc(sizeof(LogRecord *) * record_cnt);
+  for (uint64_t i = 0; i < record_cnt; i++) {
+    memcpy(image_size + i, buf + ptr, sizeof(uint64_t));
+    ptr += sizeof(uint64_t);
+    records[i] = (LogRecord *)mem_allocator.alloc(sizeof(LogRecord) + 2 * image_size[i] - 1);
+    memcpy(records[i], buf + ptr, sizeof(LogRecord) + 2 * image_size[i] - 1);
+    ptr += sizeof(LogRecord) + 2 * image_size[i] - 1;
+  }
+  assert(ptr == get_size());
 }
 
 void LogMessage::copy_to_buf(char * buf) {
   Message::mcopy_to_buf(buf);
   uint64_t ptr = Message::mget_size();
-  COPY_BUF(buf,record,ptr);
- assert(ptr == get_size());
+  COPY_BUF(buf,record_cnt,ptr);
+  for (uint64_t i = 0; i < record_cnt; i++) {
+    memcpy(buf + ptr, image_size + i, sizeof(uint64_t));
+    ptr += sizeof(uint64_t);
+    memcpy(buf + ptr, records[i], sizeof(LogRecord) + 2 * image_size[i] - 1);
+    ptr += sizeof(LogRecord) + 2 * image_size[i] - 1;
+  }
+  assert(ptr == get_size());
 }
 
 /************************/
