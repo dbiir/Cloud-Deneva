@@ -31,7 +31,11 @@ void YCSBQueryGenerator::init() {
 	mrand->init(get_sys_clock());
 	if (SKEW_METHOD == ZIPF) {
 		zeta_2_theta = zeta(2, g_zipf_theta);
+#if SINGLE_WRITE_NODE
+		uint64_t table_size = g_synth_table_size;
+#else
 		uint64_t table_size = g_synth_table_size / g_part_cnt;
+#endif	
 		the_n = table_size - 1;
 		denom = zeta(the_n, g_zipf_theta);
 	#if DYNAMIC_FLAG
@@ -356,7 +360,11 @@ BaseQuery * YCSBQueryGenerator::gen_requests_zipf(uint64_t home_partition_id, Wo
 	uint64_t access_cnt = 0;
 	set<uint64_t> all_keys;
 	set<uint64_t> partitions_accessed;
+#if SINGLE_WRITE_NODE
+	uint64_t table_size = g_synth_table_size;
+#else
 	uint64_t table_size = g_synth_table_size / g_part_cnt;
+#endif	
 
 	double r_twr = (double)(mrand->next() % 10000) / 10000;
 	double r_mpt = (double)(mrand->next() % 10000) / 10000;
@@ -375,6 +383,13 @@ BaseQuery * YCSBQueryGenerator::gen_requests_zipf(uint64_t home_partition_id, Wo
 	#ifdef NO_REMOTE
 		partition_id = home_partition_id;
 	#else
+#if SINGLE_WRITE_NODE
+		if (r_mpt < g_mpr) {
+			partition_id = 0;
+		} else {
+			partition_id = 0;
+		}
+#else
 		if ( FIRST_PART_LOCAL && rid == 0) {
 			partition_id = home_partition_id;
 		} else {
@@ -399,6 +414,7 @@ BaseQuery * YCSBQueryGenerator::gen_requests_zipf(uint64_t home_partition_id, Wo
 				partition_id = home_partition_id;
 			}
 		}
+#endif
 	#endif
 #endif
 		ycsb_request * req = (ycsb_request*) mem_allocator.alloc(sizeof(ycsb_request));
@@ -435,7 +451,11 @@ BaseQuery * YCSBQueryGenerator::gen_requests_zipf(uint64_t home_partition_id, Wo
 			i--;
 			continue;
 		}
+#if SINGLE_WRITE_NODE
+		partitions_accessed.insert(home_partition_id);
+#else
 		partitions_accessed.insert(partition_id);
+#endif
 		rid ++;
 
 		query->requests.add(req);

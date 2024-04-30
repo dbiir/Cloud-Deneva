@@ -66,12 +66,18 @@ RC YCSBWorkload::init_schema(const char * schema_file) {
 	return RCOK;
 }
 
+#if SINGLE_WRITE_NODE
+int YCSBWorkload::key_to_part(uint64_t key) {
+	return g_node_id;
+}
+#else
 int
 YCSBWorkload::key_to_part(uint64_t key) {
 	//uint64_t rows_per_part = g_synth_table_size / g_part_cnt;
 	//return key / rows_per_part;
   return key % g_part_cnt;
 }
+#endif
 
 int
 YCSBWorkload::key_to_shard(uint64_t key) {
@@ -159,12 +165,12 @@ void * YCSBWorkload::init_table_slice() {
 	uint64_t slice_size = g_synth_table_size / g_init_parallelism;
 	for (uint64_t key = slice_size * tid;
 			key < slice_size * (tid + 1);
-			//key ++
+			key ++
 	) {
-    if(GET_NODE_ID(key_to_part(key)) != g_node_id) {
-      ++key;
-      continue;
-    }
+    // if(GET_NODE_ID(key_to_part(key)) != g_node_id) {
+    //   ++key;
+    //   continue;
+    // }
 
     ++key_cnt;
     if(key_cnt % 500000 == 0) {
@@ -203,7 +209,7 @@ void * YCSBWorkload::init_table_slice() {
 
 		rc = the_index->index_insert(idx_key, m_item, part_id);
 		assert(rc == RCOK);
-    key += g_part_cnt;
+    // key += g_part_cnt;
 	}
   printf("Thd %d inserted %ld keys\n",tid,key_cnt);
 	return NULL;

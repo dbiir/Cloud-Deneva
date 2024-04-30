@@ -1417,7 +1417,10 @@ RC TxnManager::get_row(row_t * row, access_t type, row_t *& row_rtn) {
 	}
 #else
 	++txn->row_cnt;
-	if (type == WR) ++txn->write_cnt;
+	if (type == WR) {
+		++txn->write_cnt;
+		++txn_stats.write_cnt;
+	}
 	txn->accesses.add(access);
 #endif
 

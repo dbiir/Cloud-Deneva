@@ -185,6 +185,21 @@ void parser(int argc, char * argv[]) {
     }
 	}
   g_total_thread_cnt = g_thread_cnt + g_rem_thread_cnt + g_send_thread_cnt + g_abort_thread_cnt + g_stats_per_interval_thread_cnt;
+#if SINGLE_WRITE_NODE
+  if (g_node_id % g_node_cnt != 0)
+  {
+    switch (WORKLOAD)
+    {
+    case YCSB:
+      g_txn_read_perc = 1;
+      g_txn_write_perc = 0;
+      break;
+    // [ ]: 添加TPCC的只读逻辑
+    default:
+      break;
+    }
+  }
+#endif
 #if LOGGING
   g_total_thread_cnt += g_logger_thread_cnt; // logger thread
 #endif

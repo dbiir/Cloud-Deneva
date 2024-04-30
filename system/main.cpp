@@ -92,8 +92,9 @@ void parser(int argc, char * argv[]);
 int main(int argc, char *argv[]) {
 	// 0. initialize global data structure
 	parser(argc, argv);
-#if SEED != 0
-	uint64_t seed = SEED + g_node_id;
+#if FIXED_SEED
+	// uint64_t seed = SEED + g_node_id;
+	uint64_t seed = SEED;
 #else
 	uint64_t seed = get_sys_clock();
 #endif
