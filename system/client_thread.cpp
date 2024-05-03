@@ -106,7 +106,16 @@ RC ClientThread::run() {
 		Message * msg = Message::create_message((BaseQuery*)m_query,CL_QRY);
 #endif
 		((ClientQueryMessage*)msg)->client_startts = get_sys_clock();
+#if SINGLE_WRITE_NODE
+		if (m_query->readonly()) {
+			uint64_t random_node = rand() % (g_node_cnt - 1) + 1;
+			msg_queue.enqueue(get_thd_id(),msg,random_node);
+		} else {
+			msg_queue.enqueue(get_thd_id(),msg,0);
+		}
+#else
 		msg_queue.enqueue(get_thd_id(),msg,next_node_id);
+#endif
 		num_txns_sent++;
 		txns_sent[next_node]++;
 		INC_STATS(get_thd_id(),txn_sent_cnt,1);

@@ -132,7 +132,13 @@ RC InputThread::client_recv_loop() {
 		#if CC_ALG == BOCC || CC_ALG == FOCC || ONE_NODE_RECIEVE == 1
 			return_node_offset = msg->return_node_id;
 		#else
+		#if SINGLE_WRITE_NODE
+			// HACK! We assumed the number of servers and clients are the same here
+			assert(g_servers_per_client == 1);
+			return_node_offset = 0;
+		#else
 			return_node_offset = msg->return_node_id - g_server_start_node;
+		#endif
 		#endif
 			assert(return_node_offset < g_servers_per_client);
 			rsp_cnts[return_node_offset]++;
