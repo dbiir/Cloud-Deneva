@@ -7,6 +7,11 @@
 RC
 TxnManager::validate_silo()
 {
+#if SINGLE_WRITE_NODE && READONLY_OPTIMIZATION
+	if (g_node_id != 0) {
+		return RCOK;
+	}
+#endif
 	RC rc = RCOK;
 	// lock write tuples in the primary key order.
 	uint64_t wr_cnt = txn->write_cnt;
