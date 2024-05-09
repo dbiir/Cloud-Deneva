@@ -660,10 +660,12 @@ RC TxnManager::abort() {
 	}
 #endif
 #endif
+#if SINGLE_WRITE_NODE
 	for (uint64_t i = 0; i < log_records.size(); i++) {
 		mem_allocator.free(log_records[i], sizeof(LogRecord) + 2 * log_records[i]->rcd.image_size - 1);
 	}
 	log_records.clear();
+#endif
 	/*
 	// latency from most recent start or restart of transaction
 	PRINT_LATENCY("lat_s %ld %ld 0 %f %f %f %f %f %f 0.0\n"
