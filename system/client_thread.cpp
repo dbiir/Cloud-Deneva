@@ -109,11 +109,11 @@ RC ClientThread::run() {
 #if SINGLE_WRITE_NODE
 		if (m_query->readonly() && g_node_cnt != 1) {
 			uint64_t random_node;
-			if (readonly_perc() <= (g_node_cnt - 1) / g_node_cnt) {
+			if (readonly_perc() <= (g_node_cnt - 1.0) / g_node_cnt) {
 				random_node = rand() % (g_node_cnt - 1) + 1;
 			} else {
 				double r = (double)(rand() % 10000) / 10000;
-				if (r < (readonly_perc() - (g_node_cnt - 1) / g_node_cnt) / (g_node_cnt - 1) / g_node_cnt) {
+				if (r < (readonly_perc() - (g_node_cnt - 1.0) / g_node_cnt) / (g_node_cnt - 1.0) / g_node_cnt) {
 					random_node = 0;
 				} else {
 					random_node = rand() % (g_node_cnt - 1) + 1;
