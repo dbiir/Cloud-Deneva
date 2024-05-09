@@ -25,11 +25,24 @@
 
 BaseQuery * TPCCQueryGenerator::create_query(Workload * h_wl,uint64_t home_partition_id) {
   double x = (double)(rand() % 100) / 100.0;
-	if (x < g_perc_payment)
+#if TPCC_ALL
+  if (x < 0.45) {
+    return gen_new_order(home_partition_id);
+  } else if (x < 0.88) {
+    return gen_payment(home_partition_id);
+  } else if (x < 0.92) {
+    return gen_order_status(home_partition_id);
+  } else if (x < 0.96) {
+    return gen_delivery(home_partition_id);
+  } else {
+    return gen_stock_level(home_partition_id);
+  }
+#else
+  if (x < g_perc_payment)
 		return gen_payment(home_partition_id);
 	else
 		return gen_new_order(home_partition_id);
-
+#endif
 }
 
 void TPCCQuery::init(uint64_t thd_id, Workload * h_wl) {
@@ -75,6 +88,12 @@ std::set<uint64_t> TPCCQuery::participants(Message * msg, Workload * wl) {
         uint64_t req_nid = GET_NODE_ID(wh_to_part(tpcc_msg->items[i]->ol_supply_w_id));
         participant_set.insert(req_nid);
       }
+      break;
+    case TPCC_ORDER_STATUS:
+    case TPCC_DELIVERY:
+    case TPCC_STOCK_LEVEL:
+      id = GET_NODE_ID(wh_to_part(tpcc_msg->w_id));
+      participant_set.insert(id);
       break;
     default:
       assert(false);
@@ -127,6 +146,15 @@ uint64_t TPCCQuery::participants(bool *& pps,Workload * wl) {
         }
       }
       break;
+    case TPCC_ORDER_STATUS:
+    case TPCC_DELIVERY:
+    case TPCC_STOCK_LEVEL:
+      id = GET_NODE_ID(wh_to_part(w_id));
+      if(!pps[id]) {
+        pps[id] = true;
+        n++;
+      }
+      break;
     default:
       assert(false);
   }
@@ -134,7 +162,15 @@ uint64_t TPCCQuery::participants(bool *& pps,Workload * wl) {
   return n;
 }
 
-bool TPCCQuery::readonly() { return false; }
+bool TPCCQuery::readonly() {
+  if (txn_type == TPCC_PAYMENT || txn_type == TPCC_NEW_ORDER || txn_type == TPCC_DELIVERY) {
+    return false;
+  } else if (txn_type == TPCC_ORDER_STATUS || txn_type == TPCC_STOCK_LEVEL) {
+    return true;
+  } else {
+    assert(false);
+  }
+}
 
 BaseQuery * TPCCQueryGenerator::gen_payment(uint64_t home_partition) {
   TPCCQuery * query = new TPCCQuery;
@@ -142,11 +178,15 @@ BaseQuery * TPCCQueryGenerator::gen_payment(uint64_t home_partition) {
 
 	query->txn_type = TPCC_PAYMENT;
   uint64_t home_warehouse;
+#if SINGLE_WRITE_NODE
+  home_warehouse = URand(1, g_num_wh);
+#else
 	if (FIRST_PART_LOCAL) {
     while (wh_to_part(home_warehouse = URand(1, g_num_wh)) != home_partition) {
   }
   } else
 		home_warehouse = URand(1, g_num_wh);
+#endif
   query->w_id =  home_warehouse;
 	query->d_w_id = home_warehouse;
 
@@ -159,6 +199,12 @@ BaseQuery * TPCCQueryGenerator::gen_payment(uint64_t home_partition) {
 	int y = URand(1, 100);
 
 	// if(x > g_mpr) {
+#if SINGLE_WRITE_NODE
+  if (true || x >= 0) {
+    query->c_d_id = query->d_id;
+    query->c_w_id = query->w_id;
+  }
+#else
 #ifdef NO_REMOTE
   if(x >= 0) {
 #else
@@ -179,6 +225,7 @@ BaseQuery * TPCCQueryGenerator::gen_payment(uint64_t home_partition) {
       query->c_w_id = query->w_id;
     }
 	}
+#endif
 	if(y <= 60) {
 		// by last name
 		query->by_last_name = true;
@@ -202,12 +249,16 @@ BaseQuery * TPCCQueryGenerator::gen_new_order(uint64_t home_partition) {
 
 	query->txn_type = TPCC_NEW_ORDER;
   query->items.init(g_max_items_per_txn);
+#if SINGLE_WRITE_NODE
+  query->w_id = URand(1, g_num_wh);
+#else
 	if (FIRST_PART_LOCAL) {
     while (wh_to_part(query->w_id = URand(1, g_num_wh)) != home_partition) {
     }
   } else{
     query->w_id = URand(1, g_num_wh);
   }
+#endif
 
 	query->d_id = URand(1, g_dist_per_wh);
 	query->c_id = NURand(1023, 1, g_cust_per_dist);
@@ -221,6 +272,10 @@ BaseQuery * TPCCQueryGenerator::gen_new_order(uint64_t home_partition) {
 
   double r_mpr = (double)(rand() % 10000) / 10000;
   uint64_t part_limit;
+#if SINGLE_WRITE_NODE
+  if (true || r_mpr >= 0)
+    part_limit = 1;
+#else
 #ifdef NO_REMOTE
   if(r_mpr < 0)
 #else
@@ -229,6 +284,7 @@ BaseQuery * TPCCQueryGenerator::gen_new_order(uint64_t home_partition) {
     part_limit = g_part_per_txn;
   else
     part_limit = 1;
+#endif
 
   std::set<uint64_t> ol_i_ids;
   while(query->items.size() < query->ol_cnt) {
@@ -269,6 +325,108 @@ BaseQuery * TPCCQueryGenerator::gen_new_order(uint64_t home_partition) {
 
 }
 
+BaseQuery * TPCCQueryGenerator::gen_order_status(uint64_t home_partition) {
+  TPCCQuery * query = new TPCCQuery;
+  set<uint64_t> partitions_accessed;
+
+  query->txn_type = TPCC_ORDER_STATUS;
+#if SINGLE_WRITE_NODE
+  query->w_id = URand(1, g_num_wh);
+#else
+	if (FIRST_PART_LOCAL) {
+    while (wh_to_part(query->w_id = URand(1, g_num_wh)) != home_partition) {
+    }
+  } else{
+    query->w_id = URand(1, g_num_wh);
+  }
+#endif
+  partitions_accessed.insert(wh_to_part(query->w_id));
+
+  query->d_id = URand(1, g_dist_per_wh);
+
+  int y = URand(1, 100);
+  if(y <= 60) {
+		// by last name
+		query->by_last_name = true;
+		Lastname(NURand(255,0,999),query->c_last);
+	} else {
+		// by cust id
+		query->by_last_name = false;
+		query->c_id = NURand(1023, 1, g_cust_per_dist);
+	}
+
+  query->rbk = false;
+
+  query->o_id = 1;
+
+  query->partitions.init(partitions_accessed.size());
+  for(auto it = partitions_accessed.begin(); it != partitions_accessed.end(); ++it) {
+    query->partitions.add(*it);
+  }
+  return query;
+}
+
+BaseQuery * TPCCQueryGenerator::gen_delivery(uint64_t home_partition) {
+  TPCCQuery * query = new TPCCQuery;
+  set<uint64_t> partitions_accessed;
+
+  query->txn_type = TPCC_DELIVERY;
+#if SINGLE_WRITE_NODE
+  query->w_id = URand(1, g_num_wh);
+#else
+  if (FIRST_PART_LOCAL) {
+    while (wh_to_part(query->w_id = URand(1, g_num_wh)) != home_partition) {
+    }
+  } else{
+    query->w_id = URand(1, g_num_wh);
+  }
+#endif
+  partitions_accessed.insert(wh_to_part(query->w_id));
+
+  query->d_id = URand(1, g_dist_per_wh);
+  query->o_carrier_id = URand(1, 10);
+  query->ol_delivery_d = 2013;
+  query->o_id = 2101;
+
+  query->rbk = false;
+
+  query->partitions.init(partitions_accessed.size());
+  for(auto it = partitions_accessed.begin(); it != partitions_accessed.end(); ++it) {
+    query->partitions.add(*it);
+  }
+  return query;
+}
+
+BaseQuery * TPCCQueryGenerator::gen_stock_level(uint64_t home_partition) {
+  TPCCQuery * query = new TPCCQuery;
+  set<uint64_t> partitions_accessed;
+
+  query->txn_type = TPCC_STOCK_LEVEL;
+#if SINGLE_WRITE_NODE
+  query->w_id = URand(1, g_num_wh);
+#else
+  if (FIRST_PART_LOCAL) {
+    while (wh_to_part(query->w_id = URand(1, g_num_wh)) != home_partition) {
+    }
+  } else{
+    query->w_id = URand(1, g_num_wh);
+  }
+#endif
+  partitions_accessed.insert(wh_to_part(query->w_id));
+
+  query->d_id = URand(1, g_dist_per_wh);
+  query->o_id = 0; //If Calvin, update it before sending
+  query->threshold = URand(10, 20);
+
+  query->rbk = false;
+
+  query->partitions.init(partitions_accessed.size());
+  for(auto it = partitions_accessed.begin(); it != partitions_accessed.end(); ++it) {
+    query->partitions.add(*it);
+  }
+  return query;
+}
+
 uint64_t TPCCQuery::get_participants(Workload * wl) {
    uint64_t participant_cnt = 0;
    uint64_t active_cnt = 0;
@@ -306,6 +464,16 @@ uint64_t TPCCQuery::get_participants(Workload * wl) {
         active_nodes.set(req_nid,1);
       }
     }
+  } else if (txn_type == TPCC_ORDER_STATUS || txn_type == TPCC_DELIVERY || txn_type == TPCC_STOCK_LEVEL) {
+    uint64_t req_nid = GET_NODE_ID(wh_to_part(w_id));
+    if(participant_nodes[req_nid] == 0) {
+      participant_cnt++;
+      participant_nodes.set(req_nid,1);
+      active_cnt++;
+      active_nodes.set(req_nid,1);
+    }
+  } else {
+    assert(false);
   }
   return participant_cnt;
 }

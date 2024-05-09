@@ -303,6 +303,8 @@ uint64_t get_wall_clock();
 uint64_t get_server_clock();
 uint64_t get_sys_clock(); // return: in ns
 
+double readonly_perc();
+
 class myrand {
 public:
 	void init(uint64_t seed);

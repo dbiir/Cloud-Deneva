@@ -50,6 +50,14 @@ RC ClientThread::run() {
 	uint64_t iters = 0;
 	uint32_t num_txns_sent = 0;
 	int txns_sent[g_servers_per_client];
+#if WORKLOAD == TPCC
+	vector<uint64_t> order_ids;
+	for (uint64_t i = 0; i < g_num_wh; i++) {
+		for (uint64_t j = 0; j < g_dist_per_wh; j++) {
+			order_ids.push_back(_thd_id + 2101);
+		}
+	}
+#endif
 	for (uint32_t i = 0; i < g_servers_per_client; ++i) txns_sent[i] = 0;
 
 	run_starttime = get_sys_clock();
@@ -100,6 +108,13 @@ RC ClientThread::run() {
 
 		DEBUG("Client: thread %lu sending query to node: %u, %d, %f\n",
 				_thd_id, next_node_id,inf_cnt,simulation->seconds_from_start(get_sys_clock()));
+#if WORKLOAD == TPCC
+		TPCCQuery * query = (TPCCQuery *) m_query;
+		if (query->txn_type == TPCC_DELIVERY) {
+			query->o_id = order_ids.at((query->w_id - 1) * g_dist_per_wh + (query->d_id - 1));
+			order_ids[(query->w_id - 1) * g_dist_per_wh + (query->d_id - 1)] += g_client_thread_cnt;
+		}
+#endif
 #if ONE_NODE_RECIEVE == 1 && defined(NO_REMOTE) && LESS_DIS_NUM == 10
 		Message * msg = Message::create_message((BaseQuery*)m_query,CL_QRY_O);
 #else

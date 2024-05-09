@@ -46,6 +46,12 @@ void TPCCTxnManager::reset() {
 		state = TPCC_PAYMENT0;
 	} else if (tpcc_query->txn_type == TPCC_NEW_ORDER) {
 		state = TPCC_NEWORDER0;
+	} else if (tpcc_query->txn_type == TPCC_ORDER_STATUS) {
+		state = TPCC_ORDER_STATUS0;
+	} else if (tpcc_query->txn_type == TPCC_DELIVERY) {
+		state = TPCC_DELIVERY0;
+	} else if (tpcc_query->txn_type == TPCC_STOCK_LEVEL) {
+		state = TPCC_STOCK_LEVEL0;
 	}
 	next_item_id = 0;
 	TxnManager::reset();
@@ -76,7 +82,7 @@ RC TPCCTxnManager::run_txn() {
 	return rc;
 #endif
 
-	if(IS_LOCAL(txn->txn_id) && (state == TPCC_PAYMENT0 || state == TPCC_NEWORDER0)) {
+	if((IS_LOCAL(txn->txn_id) && (state == TPCC_PAYMENT0 || state == TPCC_NEWORDER0)) || state == TPCC_ORDER_STATUS0 || state == TPCC_DELIVERY0 || state == TPCC_STOCK_LEVEL0) {
 		DEBUG("Running txn %ld\n",txn->txn_id);
 #if DISTR_DEBUG
 		query->print();
@@ -116,6 +122,9 @@ bool TPCCTxnManager::is_done() {
 	TPCCQuery* tpcc_query = (TPCCQuery*) query;
 	switch(tpcc_query->txn_type) {
 		case TPCC_PAYMENT:
+		case TPCC_ORDER_STATUS:
+		case TPCC_DELIVERY:
+		case TPCC_STOCK_LEVEL:
 			//done = state == TPCC_PAYMENT5 || state == TPCC_FIN;
 			done = state == TPCC_FIN;
 			break;
@@ -432,6 +441,57 @@ void TPCCTxnManager::next_tpcc_state() {
 				state = TPCC_FIN;
 			}
 			break;
+		case TPCC_ORDER_STATUS_S:
+			state = TPCC_ORDER_STATUS0;
+			break;
+		case TPCC_ORDER_STATUS0:
+			state = TPCC_ORDER_STATUS1;
+			break;
+		case TPCC_ORDER_STATUS1:
+			state = TPCC_ORDER_STATUS2;
+			break;
+		case TPCC_ORDER_STATUS2:
+			state = TPCC_FIN;
+			break;
+		case TPCC_DELIVERY_S:
+			state = TPCC_DELIVERY0;
+			break;
+		case TPCC_DELIVERY0:
+			state = TPCC_DELIVERY1;
+			break;
+		case TPCC_DELIVERY1:
+			state = TPCC_DELIVERY2;
+			break;
+		case TPCC_DELIVERY2:
+			state = TPCC_DELIVERY3;
+			break;
+		case TPCC_DELIVERY3:
+			state = TPCC_DELIVERY4;
+			break;
+		case TPCC_DELIVERY4:
+			state = TPCC_DELIVERY5;
+			break;
+		case TPCC_DELIVERY5:
+			state = TPCC_DELIVERY6;
+			break;
+		case TPCC_DELIVERY6:
+			state = TPCC_DELIVERY7;
+			break;
+		case TPCC_DELIVERY7:
+			state = TPCC_FIN;
+			break;
+		case TPCC_STOCK_LEVEL_S:
+			state = TPCC_STOCK_LEVEL0;
+			break;
+		case TPCC_STOCK_LEVEL0:
+			state = TPCC_STOCK_LEVEL1;
+			break;
+		case TPCC_STOCK_LEVEL1:
+			state = TPCC_STOCK_LEVEL2;
+			break;
+		case TPCC_STOCK_LEVEL2:
+			state = TPCC_FIN;
+			break;
 		case TPCC_FIN:
 			break;
 		default:
@@ -527,6 +587,9 @@ RC TPCCTxnManager::run_txn_state() {
 	uint64_t ol_number = next_item_id;
 	uint64_t ol_amount = tpcc_query->ol_amount;
 	uint64_t o_id = tpcc_query->o_id;
+	uint64_t o_carrier_id = tpcc_query->o_carrier_id;
+	uint64_t ol_delivery_d = tpcc_query->ol_delivery_d;
+	uint64_t threshold = tpcc_query->threshold;
 
 	uint64_t part_id_w = wh_to_part(w_id);
 	uint64_t part_id_c_w = wh_to_part(c_w_id);
@@ -604,7 +667,52 @@ RC TPCCTxnManager::run_txn_state() {
 			rc = new_order_9(w_id, d_id, remote, ol_i_id, ol_supply_w_id, ol_quantity, ol_number,
 											 ol_amount, o_id, row);
 						break;
-		case TPCC_FIN :
+		case TPCC_ORDER_STATUS0:
+			rc = run_order_status_0(w_id, d_id, by_last_name, c_id, c_last, row);
+			break;
+		case TPCC_ORDER_STATUS1:
+			rc = run_order_status_1(w_id, d_id, o_id, row);
+			break;
+		case TPCC_ORDER_STATUS2:
+			rc = run_order_status_2(w_id, d_id, o_id, row_count, rows);
+			mem_allocator.free(rows, sizeof(row_t *) * row_count);
+			break;
+		case TPCC_DELIVERY0:
+			rc = run_delivery_0(w_id, d_id, o_id, row);
+			break;
+		case TPCC_DELIVERY1:
+			rc = run_delivery_1(o_id, row);
+			break;
+		case TPCC_DELIVERY2:
+			rc = run_delivery_2(w_id, d_id, o_id, tpcc_query->c_id, row);
+			break;
+		case TPCC_DELIVERY3:
+			rc = run_delivery_3(o_carrier_id, row);
+			break;
+		case TPCC_DELIVERY4:
+			rc = run_delivery_4(w_id, d_id, o_id, tpcc_query->ol_amount, row_count, rows);
+			break;
+		case TPCC_DELIVERY5:
+			rc = run_delivery_5(ol_delivery_d, row_count, rows);
+			mem_allocator.free(rows, sizeof(row_t *) * row_count);
+			break;
+		case TPCC_DELIVERY6:
+			rc = run_delivery_6(w_id, d_id, c_id, row);
+			break;
+		case TPCC_DELIVERY7:
+			rc = run_delivery_7(tpcc_query->ol_amount, row);
+			break;
+		case TPCC_STOCK_LEVEL0:
+			rc = run_stock_level_0(w_id, d_id, tpcc_query->o_id, row);
+			break;
+		case TPCC_STOCK_LEVEL1:
+			rc = run_stock_level_1(w_id, d_id, o_id, row_count, rows);
+			break;
+		case TPCC_STOCK_LEVEL2:
+			rc = run_stock_level_2(threshold, row_count, rows);
+			mem_allocator.free(rows, sizeof(row_t *) * row_count);
+			break;
+		case TPCC_FIN:
 				state = TPCC_FIN;
 			if (tpcc_query->rbk) return Abort;
 						//return finish(tpcc_query,false);
@@ -873,6 +981,7 @@ inline RC TPCCTxnManager::run_payment_5(uint64_t w_id, uint64_t d_id, uint64_t c
 	uint64_t row_id;
 	// Which partition should we be inserting into?
 	_wl->t_history->get_new_row(r_hist, wh_to_part(c_w_id), row_id);
+	r_hist->set_primary_key(custKey(c_id, c_w_id, c_d_id));
 	r_hist->set_value(H_C_ID, c_id);
 	r_hist->set_value(H_C_D_ID, c_d_id);
 	r_hist->set_value(H_C_W_ID, c_w_id);
@@ -881,7 +990,7 @@ inline RC TPCCTxnManager::run_payment_5(uint64_t w_id, uint64_t d_id, uint64_t c
 	int64_t date = 2013;
 	r_hist->set_value(H_DATE, date);
 	r_hist->set_value(H_AMOUNT, h_amount);
-	insert_row(r_hist, _wl->t_history);
+	insert_row(r_hist, _wl->i_history);
 #if CC_ALG == HDCC
 	if (algo == CALVIN) {
 		row->manager->_tid = txn->txn_id;
@@ -1015,6 +1124,7 @@ inline RC TPCCTxnManager::new_order_5(uint64_t w_id, uint64_t d_id, uint64_t c_i
 	row_t * r_order;
 	uint64_t row_id;
 	_wl->t_order->get_new_row(r_order, wh_to_part(w_id), row_id);
+	r_order->set_primary_key(orderPrimaryKey(w_id, d_id, *o_id));
 	r_order->set_value(O_ID, *o_id);
 	r_order->set_value(O_C_ID, c_id);
 	r_order->set_value(O_D_ID, d_id);
@@ -1023,7 +1133,7 @@ inline RC TPCCTxnManager::new_order_5(uint64_t w_id, uint64_t d_id, uint64_t c_i
 	r_order->set_value(O_OL_CNT, ol_cnt);
 	int64_t all_local = (remote? 0 : 1);
 	r_order->set_value(O_ALL_LOCAL, all_local);
-	insert_row(r_order, _wl->t_order);
+	insert_row(r_order, _wl->i_order);
 
 #if SINGLE_WRITE_NODE
 	LogRecord * log_record2 = logger.createRecord(get_txn_id(), L_INSERT, _wl->t_order->get_table_id(), row_id, O_ID, 64);
@@ -1037,10 +1147,11 @@ inline RC TPCCTxnManager::new_order_5(uint64_t w_id, uint64_t d_id, uint64_t c_i
 		+=======================================================*/
 	row_t * r_no;
 	_wl->t_neworder->get_new_row(r_no, wh_to_part(w_id), row_id);
+	r_no->set_primary_key(orderPrimaryKey(w_id, d_id, *o_id));
 	r_no->set_value(NO_O_ID, *o_id);
 	r_no->set_value(NO_D_ID, d_id);
 	r_no->set_value(NO_W_ID, w_id);
-	insert_row(r_no, _wl->t_neworder);
+	insert_row(r_no, _wl->i_neworder);
 
 #if SINGLE_WRITE_NODE
 	LogRecord * log_record3 = logger.createRecord(get_txn_id(), L_INSERT, _wl->t_neworder->get_table_id(), row_id, NO_O_ID, 24);
@@ -1195,6 +1306,7 @@ inline RC TPCCTxnManager::new_order_9(uint64_t w_id, uint64_t d_id, bool remote,
 	row_t * r_ol;
 	uint64_t row_id;
 	_wl->t_orderline->get_new_row(r_ol, wh_to_part(ol_supply_w_id), row_id);
+	r_ol->set_primary_key(orderlineKey(w_id, d_id, o_id));
 	r_ol->set_value(OL_O_ID, &o_id);
 	r_ol->set_value(OL_D_ID, &d_id);
 	r_ol->set_value(OL_W_ID, &w_id);
@@ -1205,7 +1317,7 @@ inline RC TPCCTxnManager::new_order_9(uint64_t w_id, uint64_t d_id, bool remote,
 	r_ol->set_value(OL_QUANTITY, &ol_quantity);
 	r_ol->set_value(OL_AMOUNT, &ol_amount);
 #endif
-	insert_row(r_ol, _wl->t_orderline);
+	insert_row(r_ol, _wl->i_orderline);
 #if CC_ALG == HDCC
 	if (algo == CALVIN) {
 		row->manager->_tid = txn->txn_id;
@@ -1221,6 +1333,243 @@ inline RC TPCCTxnManager::new_order_9(uint64_t w_id, uint64_t d_id, bool remote,
 	return RCOK;
 }
 
+RC TPCCTxnManager::run_order_status_0(uint64_t w_id, uint64_t d_id, bool by_last_name, uint64_t c_id, char* c_last,
+                   row_t*& r_cust_local) {
+	uint64_t starttime = get_sys_clock();
+	RC rc;
+	itemid_t * item;
+	if (by_last_name) {
+		uint64_t key = custNPKey(c_last, d_id, w_id);
+		INDEX * index = _wl->i_customer_last;
+		item = index_read(index, key, wh_to_part(w_id));
+	} else {
+		uint64_t key = custKey(c_id, d_id, w_id);
+		INDEX * index = _wl->i_customer_id;
+		item = index_read(index, key, wh_to_part(w_id));
+	}
+	assert(item != NULL);
+	row_t * row = ((row_t *)item->location);
+	rc = get_row(row, RD, r_cust_local);
+	INC_STATS(get_thd_id(),trans_benchmark_compute_time,get_sys_clock() - starttime);
+	return rc;
+}
+
+RC TPCCTxnManager::run_order_status_1(uint64_t w_id, uint64_t d_id, uint64_t& o_id, row_t*& r_orders) {
+	uint64_t starttime = get_sys_clock();
+	uint64_t key = orderPrimaryKey(w_id, d_id, o_id);
+	itemid_t * item;
+	INDEX * index = _wl->i_order;
+	item = index_read(index, key, wh_to_part(w_id));
+	assert(item != NULL);
+	row_t * row = ((row_t *)item->location);
+	RC rc = get_row(row, RD, r_orders);
+	INC_STATS(get_thd_id(),trans_benchmark_compute_time,get_sys_clock() - starttime);
+	return rc;
+}
+
+RC TPCCTxnManager::run_order_status_2(uint64_t w_id, uint64_t d_id, uint64_t o_id, uint64_t &row_count, row_t **&l_order_local) {
+	uint64_t starttime = get_sys_clock();
+	RC rc;
+	itemid_t ** items;
+	int count;
+	uint64_t key = orderlineKey(w_id, d_id, o_id);
+	INDEX * index = _wl->i_orderline;
+	items = index_read_all(index, key, wh_to_part(w_id), count);
+	row_count = count;
+	l_order_local = (row_t **) mem_allocator.alloc(sizeof(row_t *) * row_count);
+	for (uint64_t i = 0; i < row_count; i++) {
+		row_t * row = ((row_t *)items[i]->location);
+		rc = get_row(row, RD, l_order_local[i]);
+		if (rc != RCOK) return rc;
+	}
+	mem_allocator.free(items, sizeof(itemid_t *) * count);
+	INC_STATS(get_thd_id(),trans_benchmark_compute_time,get_sys_clock() - starttime);
+	return rc;
+}
+
+RC TPCCTxnManager::run_delivery_0(uint64_t w_id, uint64_t d_id, uint64_t &o_id, row_t*& r_neworder_local) {
+	uint64_t starttime = get_sys_clock();
+	uint64_t key = orderPrimaryKey(w_id, d_id, o_id);
+	itemid_t * item;
+	INDEX * index = _wl->i_neworder;
+	item = index_read(index, key, wh_to_part(w_id));
+	assert(item != NULL);
+	row_t * row = ((row_t *)item->location);
+	RC rc = get_row(row, WR, r_neworder_local);
+	INC_STATS(get_thd_id(),trans_benchmark_compute_time,get_sys_clock() - starttime);
+	return rc;
+}
+
+RC TPCCTxnManager::run_delivery_1(uint64_t &no_o_id, row_t *&r_new_order_local) {
+	uint64_t starttime = get_sys_clock();
+	assert(r_new_order_local != NULL);
+	no_o_id = *(int64_t *) r_new_order_local->get_value(NO_O_ID);
+	INDEX * index = _wl->i_neworder;
+	RC rc = index->index_remove(r_new_order_local->get_primary_key(), wh_to_part(0));
+#if SINGLE_WRITE_NODE
+	LogRecord * log_record = logger.createRecord(get_txn_id(), L_DELETE, r_new_order_local->get_table()->get_table_id(), r_new_order_local->get_primary_key(), 0, 1);
+	log_records.push_back(log_record);
+#endif
+	INC_STATS(get_thd_id(),trans_benchmark_compute_time,get_sys_clock() - starttime);
+	return rc;
+}
+
+RC TPCCTxnManager::run_delivery_2(uint64_t o_w_id, uint64_t o_d_id, uint64_t no_o_id, uint64_t &c_id, row_t *&l_order_local) {
+	uint64_t starttime = get_sys_clock();
+	uint64_t key = orderPrimaryKey(o_w_id, o_d_id, no_o_id);
+	itemid_t * item;
+	INDEX * index = _wl->i_order;
+	item = index_read(index, key, wh_to_part(o_w_id));
+	assert(item != NULL);
+	row_t * row = ((row_t *)item->location);
+	RC rc = get_row(row, WR, l_order_local);
+	if (rc != RCOK) return rc;
+	l_order_local->get_value(O_C_ID, c_id);
+	INC_STATS(get_thd_id(),trans_benchmark_compute_time,get_sys_clock() - starttime);
+	return rc;
+}
+
+RC TPCCTxnManager::run_delivery_3(uint64_t o_carrier_id, row_t *&l_order_local) {
+	uint64_t starttime = get_sys_clock();
+	assert(l_order_local != NULL);
+	uint64_t old_value;
+	l_order_local->get_value(O_CARRIER_ID, old_value);
+	l_order_local->set_value(O_CARRIER_ID, o_carrier_id);
+#if SINGLE_WRITE_NODE
+	LogRecord * log_record = logger.createRecord(get_txn_id(), L_UPDATE, l_order_local->get_table()->get_table_id(), l_order_local->get_primary_key(), O_CARRIER_ID, 8, &old_value, &o_carrier_id);
+	log_records.push_back(log_record);
+#endif
+	INC_STATS(get_thd_id(),trans_benchmark_compute_time,get_sys_clock() - starttime);
+	return RCOK;
+}
+
+RC TPCCTxnManager::run_delivery_4(uint64_t o_w_id, uint64_t o_d_id, uint64_t no_o_id, uint64_t &sum_amount, uint64_t &row_count, row_t **&l_orderline_local) {
+	uint64_t starttime = get_sys_clock();
+	RC rc;
+	itemid_t ** items;
+	int count;
+	sum_amount = 0;
+	uint64_t key = orderlineKey(o_w_id, o_d_id, no_o_id);
+	INDEX * index = _wl->i_orderline;
+	items = index_read_all(index, key, wh_to_part(o_w_id), count);
+	row_count = count;
+	l_orderline_local = (row_t **) mem_allocator.alloc(sizeof(row_t *) * row_count);
+	for (uint64_t i = 0; i < row_count; i++) {
+		row_t * row = ((row_t *)items[i]->location);
+		rc = get_row(row, WR, l_orderline_local[i]);
+		if (rc != RCOK) return rc;
+		uint64_t ol_amount;
+		l_orderline_local[i]->get_value(OL_AMOUNT, ol_amount);
+		sum_amount += ol_amount;
+	}
+	mem_allocator.free(items, sizeof(itemid_t *) * count);
+	INC_STATS(get_thd_id(),trans_benchmark_compute_time,get_sys_clock() - starttime);
+	return rc;
+}
+
+RC TPCCTxnManager::run_delivery_5(uint64_t ol_delivery_d, uint64_t &row_count, row_t **&l_orderline_local) {
+	uint64_t starttime = get_sys_clock();
+	for (uint64_t i = 0; i < row_count; i++) {
+		uint64_t old_value;
+		l_orderline_local[i]->get_value(OL_DELIVERY_D, old_value);
+		l_orderline_local[i]->set_value(OL_DELIVERY_D, ol_delivery_d);
+#if SINGLE_WRITE_NODE
+		LogRecord * log_record = logger.createRecord(get_txn_id(), L_UPDATE, l_orderline_local[i]->get_table()->get_table_id(), l_orderline_local[i]->get_primary_key(), OL_DELIVERY_D, 8, &old_value, &ol_delivery_d);
+		log_records.push_back(log_record);
+#endif
+	}
+	INC_STATS(get_thd_id(),trans_benchmark_compute_time,get_sys_clock() - starttime);
+	return RCOK;
+}
+
+RC TPCCTxnManager::run_delivery_6(uint64_t c_w_id, uint64_t c_d_id, uint64_t c_id, row_t *&r_cust_local) {
+	uint64_t starttime = get_sys_clock();
+	uint64_t key = custKey(c_id, c_d_id, c_w_id);
+	itemid_t * item;
+	INDEX * index = _wl->i_customer_id;
+	item = index_read(index, key, wh_to_part(c_w_id));
+	assert(item != NULL);
+	row_t * row = ((row_t *)item->location);
+	RC rc = get_row(row, WR, r_cust_local);
+	INC_STATS(get_thd_id(),trans_benchmark_compute_time,get_sys_clock() - starttime);
+	return rc;
+}
+
+RC TPCCTxnManager::run_delivery_7(uint64_t &sum_amount, row_t *&r_cust_local) {
+	uint64_t starttime = get_sys_clock();
+	assert(r_cust_local != NULL);
+	double c_balance;
+	r_cust_local->get_value(C_BALANCE, c_balance);
+	double new_balance = c_balance + sum_amount;
+	r_cust_local->set_value(C_BALANCE, new_balance);
+#if SINGLE_WRITE_NODE
+	LogRecord * log_record = logger.createRecord(get_txn_id(), L_UPDATE, r_cust_local->get_table()->get_table_id(), r_cust_local->get_primary_key(), C_BALANCE, 8, &c_balance, &new_balance);
+	log_records.push_back(log_record);
+#endif
+	INC_STATS(get_thd_id(),trans_benchmark_compute_time,get_sys_clock() - starttime);
+	return RCOK;
+}
+
+RC TPCCTxnManager::run_stock_level_0(uint64_t w_id, uint64_t d_id, uint64_t &d_next_o_id, row_t *&r_dist_local) {
+	uint64_t starttime = get_sys_clock();
+	uint64_t key = distKey(d_id, w_id);
+	itemid_t * item;
+	INDEX * index = _wl->i_district;
+	item = index_read(index, key, wh_to_part(w_id));
+	assert(item != NULL);
+	row_t * row = ((row_t *)item->location);
+	RC rc = get_row(row, RD, r_dist_local);
+	if (rc != RCOK) return rc;
+	r_dist_local->get_value(D_NEXT_O_ID, d_next_o_id);
+	INC_STATS(get_thd_id(),trans_benchmark_compute_time,get_sys_clock() - starttime);
+	return rc;
+}
+
+RC TPCCTxnManager::run_stock_level_1(uint64_t w_id, uint64_t d_id, uint64_t d_next_o_id, uint64_t &item_count, row_t **&r_orderline_local) {
+	uint64_t starttime = get_sys_clock();
+	RC rc;
+	itemid_t ** items;
+	int count;
+	uint64_t key = orderlineKey(w_id, d_id, d_next_o_id - 1);
+	INDEX * index = _wl->i_orderline;
+	items = index_read_all(index, key, wh_to_part(w_id), count);
+	item_count = count;
+	r_orderline_local = (row_t **) mem_allocator.alloc(sizeof(row_t *) * item_count);
+	for (uint64_t i = 0; i < item_count; i++) {
+		row_t * row = ((row_t *)items[i]->location);
+		rc = get_row(row, RD, r_orderline_local[i]);
+		if (rc != RCOK) return rc;
+	}
+	mem_allocator.free(items, sizeof(itemid_t *) * count);
+	INC_STATS(get_thd_id(),trans_benchmark_compute_time,get_sys_clock() - starttime);
+	return rc;
+}
+
+RC TPCCTxnManager::run_stock_level_2(uint64_t threshold, uint64_t &item_count, row_t **&r_local) {
+	uint64_t starttime = get_sys_clock();
+	RC rc;
+	INDEX * index = _wl->i_stock;
+	row_t ** r_stock_local = (row_t **) mem_allocator.alloc(sizeof(row_t *) * item_count);
+	for (uint64_t i = 0; i < item_count; i++) {
+		uint64_t ol_i_id;
+		uint64_t ol_w_id;
+		r_local[i]->get_value(OL_I_ID, ol_i_id);
+		r_local[i]->get_value(OL_SUPPLY_W_ID, ol_w_id);
+		row_t * row = (row_t *) index_read(index, stockKey(ol_i_id, ol_w_id), wh_to_part(ol_w_id))->location;
+		assert(row);
+		rc = get_row(row, RD, r_stock_local[i]);
+		if (rc != RCOK) return rc;
+		uint64_t s_quantity;
+		r_stock_local[i]->get_value(S_QUANTITY, s_quantity);
+		if (s_quantity < threshold) {
+			// Actually do nothing
+		}
+	}
+	mem_allocator.free(r_local, sizeof(row_t *) * item_count);
+	r_local = r_stock_local;
+	INC_STATS(get_thd_id(),trans_benchmark_compute_time,get_sys_clock() - starttime);
+	return rc;
+}
 
 RC TPCCTxnManager::run_calvin_txn() {
 	RC rc = RCOK;

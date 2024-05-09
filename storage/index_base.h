@@ -41,8 +41,10 @@ public:
 
   virtual RC index_read(idx_key_t key, itemid_t *&item, int part_id = -1, int thd_id = 0) = 0;
 
+  virtual RC index_read_all(idx_key_t key, itemid_t **&items, int &count, int part_id = -1) = 0;
+
 	// TODO implement index_remove
-  virtual RC index_remove(idx_key_t key) {
+  virtual RC index_remove(idx_key_t key, int part_id = -1) {
     return RCOK;
   };
 

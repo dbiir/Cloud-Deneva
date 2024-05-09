@@ -46,8 +46,10 @@ public:
 	void delete_bucket();
 	void insert_item(idx_key_t key, itemid_t * item, int part_id);
 	void insert_item_nonunique(idx_key_t key, itemid_t * item, int part_id);
+	void remove_item(idx_key_t key, int part_id);
 	void read_item(idx_key_t key, itemid_t * &item);
 	void read_item(idx_key_t key, uint32_t count, itemid_t * &item);
+	void read_all_item(idx_key_t key, itemid_t **&items, int &count);
 	BucketNode * 	first_node;
 	uint64_t 		node_cnt;
 	bool 			locked;
@@ -73,12 +75,12 @@ public:
 	RC	 		index_read(idx_key_t key, int count, itemid_t * &item, int part_id=-1);
 	RC	 		index_read(idx_key_t key, itemid_t * &item,
 							int part_id=-1, int thd_id=0);
+	RC			index_read_all(idx_key_t key, itemid_t **& items, int &count, int part_id=-1);
 
 	// the following call returns a list of items
 //	RC 			index_read(idx_key_t key, Link_Item * &li, uint64_t &item_cnt);
 
-	// TODO implement index_remove
-//	RC 			index_remove(idx_key_t key);
+	RC 			index_remove(idx_key_t key, int part_id = -1);
 
 private:
 //	bool get_latch(BucketHeader * bucket, latch_t latch_type);

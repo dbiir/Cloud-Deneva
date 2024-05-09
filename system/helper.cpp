@@ -168,6 +168,16 @@ uint64_t get_sys_clock() {
 	return 0;
 }
 
+double readonly_perc() {
+#if WORKLOAD == YCSB
+  	return g_txn_read_perc + pow(g_tup_read_perc, g_req_per_query);
+#elif WORKLOAD == TPCC
+  	return 0.08;
+#else
+  	assert(false);
+#endif
+}
+
 void myrand::init(uint64_t seed) { this->seed = seed; }
 
 uint64_t myrand::next() {

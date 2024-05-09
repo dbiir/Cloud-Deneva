@@ -264,6 +264,7 @@ void Transaction::init() {
 	batch_id = UINT64_MAX;
 	DEBUG_M("Transaction::init array insert_rows\n");
 	insert_rows.init(g_max_items_per_txn + 10);
+	delete_rows.init(g_max_items_per_txn + 10);
 	DEBUG_M("Transaction::reset array accesses\n");
 	accesses.init(MAX_ROW_PER_TXN);
 
@@ -275,6 +276,7 @@ void Transaction::reset(uint64_t thd_id) {
 	accesses.clear();
 	//release_inserts(thd_id);
 	insert_rows.clear();
+	delete_rows.clear();
 	write_cnt = 0;
 	row_cnt = 0;
 	twopc_state = START;
@@ -289,17 +291,33 @@ void Transaction::release_accesses(uint64_t thd_id) {
 
 void Transaction::release_inserts(uint64_t thd_id) {
 	for(uint64_t i = 0; i < insert_rows.size(); i++) {
-	row_t * row = insert_rows[i];
-#if CC_ALG != MAAT && CC_ALG != OCC && CC_ALG != WOOKONG && \
-		CC_ALG != TICTOC && CC_ALG != BOCC && CC_ALG != FOCC && CC_ALG != DTA && CC_ALG != DLI_MVCC_OCC && \
-		CC_ALG != DLI_MVCC_BASE && CC_ALG != DLI_DTA && CC_ALG != DLI_DTA2 && CC_ALG != DLI_DTA3 && \
-		CC_ALG != DLI_BASE && CC_ALG != DLI_OCC
-		DEBUG_M("TxnManager::cleanup row->manager free\n");
-		mem_allocator.free(row->manager, 0);
-#endif
+		row_t * row = insert_rows[i].first;
+		row->free_manager();
 		row->free_row();
-		DEBUG_M("Transaction::release insert_rows free\n")
-		row_pool.put(thd_id,row);
+		mem_allocator.free(row,sizeof(row_t));
+		DEBUG_M("Transaction::release insert_rows free\n");
+	}
+}
+
+void Transaction::do_insert() {
+	for (uint64_t i = 0; i < insert_rows.size(); i++) {
+		row_t * row = insert_rows[i].first;
+		itemid_t * m_item = (itemid_t *) mem_allocator.alloc(sizeof(itemid_t));
+		m_item->type = DT_row;
+		m_item->location = insert_rows[i].first;
+		m_item->valid = true;
+		insert_rows[i].second->index_insert(row->get_primary_key(), m_item, row->get_part_id());
+	}
+}
+
+void Transaction::do_delete() {
+	for (uint64_t i = 0; i < delete_rows.size(); i++) {
+		row_t * row = delete_rows[i].first;
+		itemid_t * m_item;
+		delete_rows[i].second->index_read(row->get_primary_key(), m_item, row->get_part_id(), 0);
+		assert(m_item != NULL);
+		// m_item->valid = false;
+		insert_rows[i].second->index_remove(row->get_primary_key(), row->get_part_id());
 	}
 }
 
@@ -311,6 +329,7 @@ void Transaction::release(uint64_t thd_id) {
 	release_inserts(thd_id);
 	DEBUG_M("Transaction::release array insert_rows free\n")
 	insert_rows.release();
+	delete_rows.release();
 }
 
 void TxnManager::init(uint64_t thd_id, Workload * h_wl) {
@@ -1148,6 +1167,10 @@ void TxnManager::cleanup_row(RC rc, uint64_t rid) {
 }
 
 void TxnManager::cleanup(RC rc) {
+	if (rc == RCOK) {
+		txn->do_insert();
+		txn->do_delete();
+	}
 #if CC_ALG == SILO
   finish(rc);
 #endif
@@ -1214,6 +1237,7 @@ void TxnManager::cleanup(RC rc) {
 	if (rc == Abort) {
 		txn->release_inserts(get_thd_id());
 		txn->insert_rows.clear();
+		txn->delete_rows.clear();
 
 		INC_STATS(get_thd_id(), abort_time, get_sys_clock() - starttime);
 	}
@@ -1485,11 +1509,16 @@ RC TxnManager::get_row_post_wait(row_t *& row_rtn) {
 	return RCOK;
 }
 
-// This function is useless
-void TxnManager::insert_row(row_t * row, table_t * table) {
+void TxnManager::insert_row(row_t * row, INDEX * index) {
 	if (CC_ALG == HSTORE || CC_ALG == HSTORE_SPEC) return;
 	assert(txn->insert_rows.size() < MAX_ROW_PER_TXN);
-	txn->insert_rows.add(row);
+	txn->insert_rows.add(std::pair<row_t*, INDEX*>(row, index));
+}
+
+void TxnManager::delete_row(row_t * row, INDEX * index) {
+	if (CC_ALG == HSTORE || CC_ALG == HSTORE_SPEC) return;
+	assert(txn->delete_rows.size() < MAX_ROW_PER_TXN);
+	txn->delete_rows.add(std::pair<row_t*, INDEX*>(row, index));
 }
 
 itemid_t *TxnManager::index_read(INDEX *index, idx_key_t key, int part_id) {
@@ -1516,6 +1545,18 @@ itemid_t *TxnManager::index_read(INDEX *index, idx_key_t key, int part_id, int c
 	//txn_time_idx += t;
 
 	return item;
+}
+
+itemid_t **TxnManager::index_read_all(INDEX * index, idx_key_t key, int part_id, int &count) {
+	uint64_t starttime = get_sys_clock();
+
+	itemid_t ** items;
+	index->index_read_all(key, items, count, part_id);
+
+	uint64_t t = get_sys_clock() - starttime;
+	INC_STATS(get_thd_id(), txn_index_time, t);
+
+	return items;
 }
 
 RC TxnManager::validate_c() {

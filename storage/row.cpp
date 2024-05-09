@@ -211,10 +211,48 @@ void row_t::copy(row_t * src) {
 
 void row_t::free_row() {
 	DEBUG_M("row_t::free_row free\n");
-#if SIM_FULL
+#if SIM_FULL_ROW
 	mem_allocator.free(data, sizeof(char) * get_tuple_size());
 #else
 	mem_allocator.free(data, sizeof(uint64_t) * 1);
+#endif
+}
+
+void row_t::free_manager() {
+#if CC_ALG == NO_WAIT || CC_ALG == WAIT_DIE || CC_ALG == CALVIN
+	mem_allocator.free(manager, sizeof(Row_lock));
+#elif CC_ALG == TIMESTAMP
+	mem_allocator.free(manager, sizeof(Row_ts));
+#elif CC_ALG == MVCC
+	mem_allocator.free(manager, sizeof(Row_mvcc));
+#elif CC_ALG == OCC || CC_ALG == BOCC || CC_ALG == FOCC
+	mem_allocator.free(manager, sizeof(Row_occ));
+#elif CC_ALG == DLI_BASE || CC_ALG == DLI_OCC
+	mem_allocator.free(manager, sizeof(Row_dli_base));
+#elif CC_ALG == DLI_MVCC_OCC || CC_ALG == DLI_DTA || CC_ALG == DLI_DTA2 || CC_ALG == DLI_DTA3 || CC_ALG == DLI_MVCC
+	mem_allocator.free(manager, sizeof(Row_si));
+#elif CC_ALG == MAAT
+	mem_allocator.free(manager, sizeof(Row_maat));
+#elif CC_ALG == DTA
+	mem_allocator.free(manager, sizeof(Row_dta));
+#elif CC_ALG == WOOKONG
+	mem_allocator.free(manager, sizeof(Row_wkdb));
+#elif CC_ALG == TICTOC
+	delete manager;
+#elif CC_ALG == SSI
+	mem_allocator.free(manager, sizeof(Row_ssi));
+#elif CC_ALG == WSI
+	mem_allocator.free(manager, sizeof(Row_wsi));
+#elif CC_ALG == CNULL
+	mem_allocator.free(manager, sizeof(Row_null));
+#elif CC_ALG == HDCC
+	mem_allocator.free(manager, sizeof(Row_hdcc));
+#elif CC_ALG == SNAPPER
+	mem_allocator.free(manager, sizeof(Row_snapper));
+#elif CC_ALG == SILO
+	mem_allocator.free(manager, sizeof(Row_silo));
+#elif CC_ALG == ARIA
+	mem_allocator.free(manager, sizeof(Row_aria));
 #endif
 }
 

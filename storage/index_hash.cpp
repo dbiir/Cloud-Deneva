@@ -157,6 +157,32 @@ RC IndexHash::index_read(idx_key_t key, itemid_t * &item,
 	return rc;
 }
 
+RC IndexHash::index_read_all(idx_key_t key, itemid_t **& items, int &count, int part_id) {
+	uint64_t bkt_idx = hash(key);
+	assert(bkt_idx < _bucket_cnt_per_part);
+	BucketHeader * cur_bkt = &_buckets[0][bkt_idx];
+	RC rc = RCOK;
+	cur_bkt->read_all_item(key, items, count);
+	return rc;
+}
+
+RC IndexHash::index_remove(idx_key_t key, int part_id) {
+	RC rc = RCOK;
+	uint64_t bkt_idx = hash(key);
+	assert(bkt_idx < _bucket_cnt_per_part);
+	//BucketHeader * cur_bkt = &_buckets[part_id][bkt_idx];
+	BucketHeader * cur_bkt = &_buckets[0][bkt_idx];
+	// 1. get the ex latch
+	get_latch(cur_bkt);//delete by 																	ym
+
+	// 2. update the latch list
+	cur_bkt->remove_item(key, part_id);
+
+	// 3. release the latch
+	release_latch(cur_bkt);//delete by 																	ym
+	return rc;
+}
+
 /************** BucketHeader Operations ******************/
 
 void BucketHeader::init() {
@@ -220,6 +246,34 @@ void BucketHeader::insert_item_nonunique(idx_key_t key,
   first_node = new_node;
 }
 
+void BucketHeader::remove_item(idx_key_t key, int part_id) {
+	BucketNode * cur_node = first_node;
+	BucketNode * prev_node = NULL;
+	while (cur_node != NULL) {
+		if (cur_node->key == key)
+			break;
+		prev_node = cur_node;
+		cur_node = cur_node->next;
+	}
+	if (cur_node == NULL) {
+		return;
+	}
+	if (prev_node != NULL) {
+		prev_node->next = cur_node->next;
+	} else {
+		first_node = cur_node->next;
+	}
+	//free memory
+	if (cur_node->items->type == DT_row) {
+		row_t * row = (row_t *)cur_node->items->location;
+		row->free_row();
+		row->free_manager();
+		mem_allocator.free(row,sizeof(row_t));
+	}
+	mem_allocator.free(cur_node->items,sizeof(itemid_t));
+	mem_allocator.free(cur_node,sizeof(BucketNode));
+}
+
 void BucketHeader::read_item(idx_key_t key, itemid_t *&item) {
 	BucketNode * cur_node = first_node;
 	while (cur_node != NULL) {
@@ -253,4 +307,37 @@ void BucketHeader::read_item(idx_key_t key, uint32_t count, itemid_t *&item) {
     M_ASSERT_V(cur_node != NULL, "Key does not exist! %ld\n",key);
     assert(cur_node->key == key);
 	item = cur_node->items;
+}
+
+// [ ]: Not a good way to implement this function. It is better to return a list of items. Thus, we can get items by only read the bucket once.
+void BucketHeader::read_all_item(idx_key_t key, itemid_t **&items, int &count) {
+	BucketNode * cur_node = first_node;
+	bool find = false;
+	count = 0;
+	while (cur_node != NULL) {
+		if (cur_node->key == key) {
+			count ++;
+			find = true;
+		} else if (find) {
+			break;
+		}
+		cur_node = cur_node->next;
+	}
+	if (count == 0) {
+		items = NULL;
+		return;
+	}
+	items = (itemid_t **) mem_allocator.alloc(sizeof(itemid_t *) * count);
+	cur_node = first_node;
+	int re_count = 0;
+	while (cur_node != NULL) {
+		if (cur_node->key == key) {
+			items[re_count] = cur_node->items;
+			re_count ++;
+		} else if (re_count > 0) {
+			break;
+		}
+		cur_node = cur_node->next;
+	}
+	assert(re_count == count);
 }

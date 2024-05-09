@@ -81,8 +81,10 @@ RC TPCCWorkload::init_schema(const char * schema_file) {
 	i_customer_id = indexes["CUSTOMER_ID_IDX"];
 	i_customer_last = indexes["CUSTOMER_LAST_IDX"];
 	i_stock = indexes["STOCK_IDX"];
-//	i_order = indexes["ORDER_IDX"];
-//	i_orderline = indexes["ORDER-LINE_IDX"];
+	i_order = indexes["ORDER_IDX"];
+	i_orderline = indexes["ORDER-LINE_IDX"];
+	i_neworder = indexes["NEW-ORDER_IDX"];
+	i_history = indexes["HISTORY_IDX"];
 	return RCOK;
 }
 
@@ -152,7 +154,7 @@ RC TPCCWorkload::init_table() {
   fflush(stdout);
 
   // Order Table
-  /*
+//   /*
 	for (UInt32 i = 0; i < g_init_parallelism - 1; i++) {
 	pthread_create(&p_thds[i], NULL, threadInitOrder, &tt[i]);
 	}
@@ -166,7 +168,7 @@ RC TPCCWorkload::init_table() {
   }
   printf("ORDER Done\n");
   fflush(stdout);
-  */
+//   */
 	threadInitWh(this);
   printf("WAREHOUSE Done\n");
   fflush(stdout);
@@ -240,7 +242,7 @@ void TPCCWorkload::init_tab_item(int id) {
 void TPCCWorkload::init_tab_wh() {
   if (WL_VERB) printf("[init] workload table.\n");
 	for (UInt32 wid = 1; wid <= g_num_wh; wid ++) {
-	if(GET_NODE_ID(wh_to_part(wid)) != g_node_id) continue;
+		// if(GET_NODE_ID(wh_to_part(wid)) != g_node_id) continue;
 		row_t * row;
 		uint64_t row_id;
 		t_warehouse->get_new_row(row, 0, row_id);
@@ -446,7 +448,7 @@ void TPCCWorkload::init_tab_order(int id, uint64_t did, uint64_t wid) {
 		row_t * row;
 		uint64_t row_id;
 		t_order->get_new_row(row, 0, row_id);
-		row->set_primary_key(oid);
+		row->set_primary_key(orderPrimaryKey(wid, did, oid));
 		uint64_t o_ol_cnt = 1;
 		uint64_t cid = get_permutation();
 		row->set_value(O_ID, oid);
@@ -464,16 +466,17 @@ void TPCCWorkload::init_tab_order(int id, uint64_t did, uint64_t wid) {
 		row->set_value(O_ALL_LOCAL, 1);
 
 		// Insert to indexes
-//		uint64_t key = custKey(cid, did, wid);
-//		index_insert(i_order_wdc, key, row, wh_to_part(wid));
+		// uint64_t key = custKey(cid, did, wid);
+		// index_insert(i_order_wdc, key, row, wh_to_part(wid));
 
-//		key = orderPrimaryKey(wid, did, oid);
-//		index_insert(i_order_wdo, key, row, wh_to_part(wid));
+		uint64_t key = orderPrimaryKey(wid, did, oid);
+		index_insert(i_order, key, row, wh_to_part(wid));
 
 		// ORDER-LINE
 #if !TPCC_SMALL
 		for (uint64_t ol = 1; ol <= o_ol_cnt; ol++) {
 			t_orderline->get_new_row(row, 0, row_id);
+			row->set_primary_key(orderlineKey(wid, did, oid));
 			row->set_value(OL_O_ID, oid);
 			row->set_value(OL_D_ID, did);
 			row->set_value(OL_W_ID, wid);
@@ -488,23 +491,26 @@ void TPCCWorkload::init_tab_order(int id, uint64_t did, uint64_t wid) {
 				row->set_value(OL_AMOUNT, (double)URand(1, 999999)/100);
 			}
 			row->set_value(OL_QUANTITY, 5);
-			char ol_dist_info[24];
-			MakeAlphaString(24, 24, ol_dist_info);
-			row->set_value(OL_DIST_INFO, ol_dist_info);
+			// char ol_dist_info[24];
+			// MakeAlphaString(24, 24, ol_dist_info);
+			// row->set_value(OL_DIST_INFO, ol_dist_info);
 
-//			uint64_t key = orderlineKey(wid, did, oid);
-//			index_insert(i_orderline, key, row, wh_to_part(wid));
+			uint64_t key = orderlineKey(wid, did, oid);
+			index_insert(i_orderline, key, row, wh_to_part(wid));
 
-//			key = distKey(did, wid);
-//			index_insert(i_orderline_wd, key, row, wh_to_part(wid));
+			// key = distKey(did, wid);
+			// index_insert(i_orderline_wd, key, row, wh_to_part(wid));
 		}
 #endif
 		// NEW ORDER
 		if (oid > 2100) {
 			t_neworder->get_new_row(row, 0, row_id);
+			row->set_primary_key(orderPrimaryKey(wid, did, oid));
 			row->set_value(NO_O_ID, oid);
 			row->set_value(NO_D_ID, did);
 			row->set_value(NO_W_ID, wid);
+			uint64_t key = orderPrimaryKey(wid, did, oid);
+			index_insert(i_neworder, key, row, wh_to_part(wid));
 		}
 	}
 }
@@ -565,9 +571,9 @@ void * TPCCWorkload::threadInitWh(void * This) {
 void * TPCCWorkload::threadInitDist(void * This) {
   TPCCWorkload * wl = (TPCCWorkload*) This;
 	for (uint64_t wid = 1; wid <= g_num_wh; wid ++) {
-	if (GET_NODE_ID(wh_to_part(wid)) != g_node_id) continue;
+		// if (GET_NODE_ID(wh_to_part(wid)) != g_node_id) continue;
 		wl->init_tab_dist(wid);
-  }
+  	}
 	printf("DISTRICT Done\n");
 	return NULL;
 }
@@ -576,9 +582,9 @@ void * TPCCWorkload::threadInitStock(void * This) {
   TPCCWorkload * wl = ((thr_args*) This)->wl;
   int id = ((thr_args*) This)->id;
 	for (uint64_t wid = 1; wid <= g_num_wh; wid ++) {
-	if (GET_NODE_ID(wh_to_part(wid)) != g_node_id) continue;
+	// if (GET_NODE_ID(wh_to_part(wid)) != g_node_id) continue;
 		wl->init_tab_stock(id,wid);
-  }
+  	}
 	printf("STOCK Done\n");
 	return NULL;
 }
@@ -587,11 +593,11 @@ void * TPCCWorkload::threadInitCust(void * This) {
   TPCCWorkload * wl = ((thr_args*) This)->wl;
   int id = ((thr_args*) This)->id;
 	for (uint64_t wid = 1; wid <= g_num_wh; wid ++) {
-	if (GET_NODE_ID(wh_to_part(wid)) != g_node_id) continue;
+	// if (GET_NODE_ID(wh_to_part(wid)) != g_node_id) continue;
 		for (uint64_t did = 1; did <= g_dist_per_wh; did++) {
 			wl->init_tab_cust(id,did, wid);
+		}
 	}
-  }
 	printf("CUSTOMER %d Done\n",((thr_args *)This)->id);
 	return NULL;
 }
@@ -599,10 +605,10 @@ void * TPCCWorkload::threadInitCust(void * This) {
 void * TPCCWorkload::threadInitHist(void * This) {
   TPCCWorkload * wl = (TPCCWorkload*) This;
 	for (uint64_t wid = 1; wid <= g_num_wh; wid ++) {
-	if (GET_NODE_ID(wh_to_part(wid)) != g_node_id) continue;
+	// if (GET_NODE_ID(wh_to_part(wid)) != g_node_id) continue;
 		for (uint64_t did = 1; did <= g_dist_per_wh; did++)
-	  for (uint64_t cid = 1; cid <= g_cust_per_dist; cid++) wl->init_tab_hist(cid, did, wid);
-  }
+	  	for (uint64_t cid = 1; cid <= g_cust_per_dist; cid++) wl->init_tab_hist(cid, did, wid);
+  	}
 	printf("HISTORY Done\n");
 	return NULL;
 }
@@ -611,9 +617,9 @@ void * TPCCWorkload::threadInitOrder(void * This) {
   TPCCWorkload * wl = ((thr_args*) This)->wl;
   int id = ((thr_args*) This)->id;
 	for (uint64_t wid = 1; wid <= g_num_wh; wid ++) {
-	if (GET_NODE_ID(wh_to_part(wid)) != g_node_id) continue;
-	for (uint64_t did = 1; did <= g_dist_per_wh; did++) wl->init_tab_order(id, did, wid);
-  }
+		// if (GET_NODE_ID(wh_to_part(wid)) != g_node_id) continue;
+		for (uint64_t did = 1; did <= g_dist_per_wh; did++) wl->init_tab_order(id, did, wid);
+  	}
 	printf("ORDER Done\n");
 	return NULL;
 }

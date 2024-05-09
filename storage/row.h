@@ -69,6 +69,7 @@ public:
 	RC switch_schema(table_t * host_table);
 	// not every row has a manager
 	void init_manager(row_t * row);
+	void free_manager();
 
 	table_t * get_table();
 	Catalog * get_schema();

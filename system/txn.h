@@ -67,6 +67,8 @@ public:
 	void reset(uint64_t thd_id);
 	void release_accesses(uint64_t thd_id);
 	void release_inserts(uint64_t thd_id);
+	void do_insert();
+	void do_delete();
 	void release(uint64_t thd_id);
 	//vector<Access*> accesses;
 	Array<Access*> accesses;
@@ -79,7 +81,8 @@ public:
 	uint64_t row_cnt;
 	// Internal state
 	TxnState twopc_state;
-	Array<row_t*> insert_rows;
+	Array<std::pair<row_t*, INDEX*>> insert_rows;
+	Array<std::pair<row_t*, INDEX*>> delete_rows;
 	txnid_t         txn_id;
 	uint64_t batch_id;
 	RC rc;
@@ -355,10 +358,12 @@ public:
 protected:
 
 	int rsp_cnt;
-	void            insert_row(row_t * row, table_t * table);
+	void            insert_row(row_t * row, INDEX * index);
+	void			delete_row(row_t * row, INDEX * index);
 
 	itemid_t *      index_read(INDEX * index, idx_key_t key, int part_id);
 	itemid_t *      index_read(INDEX * index, idx_key_t key, int part_id, int count);
+	itemid_t **		index_read_all(INDEX * index, idx_key_t key, int part_id, int &count);
 	RC get_lock(row_t * row, access_t type);
 	RC get_row(row_t * row, access_t type, row_t *& row_rtn);
 	RC get_row_post_wait(row_t *& row_rtn);

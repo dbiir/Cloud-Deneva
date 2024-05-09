@@ -324,7 +324,6 @@ enum TPCCTable {
   TPCC_STOCK
 };
 enum TPCCTxnType {
-  TPCC_ALL,
           TPCC_PAYMENT,
           TPCC_NEW_ORDER,
           TPCC_ORDER_STATUS,
@@ -341,7 +340,7 @@ enum DATxnType {
 #define MAX_DA_TABLE_SIZE 10000
 
 
-#define TXN_TYPE          TPCC_ALL
+#define TPCC_ALL true
 #define PERC_PAYMENT 0.0
 #define FIRSTNAME_MINLEN      8
 #define FIRSTNAME_LEN         16
@@ -506,6 +505,7 @@ enum PPSTxnType {
 #define ONE_SECOND 1 * BILLION
 #define SNAPPER_TXN_TIMEOUT 0.1 * MILLION
 
+#define FIXED_SEED true
 #define SEED 0
 #define SHMEM_ENV false
 #define ENVIRONMENT_EC2 false
