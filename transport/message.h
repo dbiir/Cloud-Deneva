@@ -504,7 +504,7 @@ public:
   bool remote;
   uint64_t ol_cnt;
   uint64_t o_entry_d;
-
+  uint64_t o_id;
 };
 
 class PPSQueryMessage : public QueryMessage {

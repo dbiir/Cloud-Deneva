@@ -117,10 +117,11 @@ private:
 	void init_tab_hist(uint64_t c_id, uint64_t d_id, uint64_t w_id);
 	void init_tab_order(int id,uint64_t d_id, uint64_t w_id);
 
-	UInt32 perm_count;
+  std::atomic<uint64_t> perm_count;
 	uint64_t * perm_c_id;
 	void init_permutation();
 	uint64_t get_permutation();
+	uint64_t get_permutation(uint64_t count);
 
 	static void * threadInitItem(void * This);
 	static void * threadInitWh(void * This);

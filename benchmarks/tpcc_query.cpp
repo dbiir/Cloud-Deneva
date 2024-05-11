@@ -279,7 +279,7 @@ BaseQuery * TPCCQueryGenerator::gen_new_order(uint64_t home_partition) {
 #ifdef NO_REMOTE
   if(r_mpr < 0)
 #else
-	if(r_mpr < g_mpr_neworder)
+	if(r_mpr <= g_mpr_neworder)
 #endif
     part_limit = g_part_per_txn;
   else
@@ -300,10 +300,13 @@ BaseQuery * TPCCQueryGenerator::gen_new_order(uint64_t home_partition) {
     } else {
       if(partitions_accessed.size() < part_limit) {
         if(query->items.size() == 0){
+          //we need to assure that txn access home partition at least once
+          item->ol_supply_w_id = query->w_id;
+        } else if (query->items.size() == 1) {
           //we need to assure that txn access remote partition at least once
           while(wh_to_part(item->ol_supply_w_id = URand(1, g_num_wh)) == home_partition){
           }
-        }else{
+        } else{
           item->ol_supply_w_id = URand(1, g_num_wh);
         }
         partitions_accessed.insert(wh_to_part(item->ol_supply_w_id));
@@ -415,7 +418,7 @@ BaseQuery * TPCCQueryGenerator::gen_stock_level(uint64_t home_partition) {
   partitions_accessed.insert(wh_to_part(query->w_id));
 
   query->d_id = URand(1, g_dist_per_wh);
-  query->o_id = 0; //If Calvin, update it before sending
+  query->o_id = 1; //If Calvin, update it before sending
   query->threshold = URand(10, 20);
 
   query->rbk = false;

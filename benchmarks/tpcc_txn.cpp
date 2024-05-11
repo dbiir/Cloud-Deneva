@@ -147,6 +147,8 @@ RC TPCCTxnManager::acquire_locks() {
 	RC rc2;
 	INDEX * index;
 	itemid_t * item;
+	itemid_t ** items;
+	int count;
 	row_t* row;
 	uint64_t key;
 	incr_lr();
@@ -159,6 +161,7 @@ RC TPCCTxnManager::acquire_locks() {
 	uint64_t c_w_id = tpcc_query->c_w_id;
 	uint64_t c_d_id = tpcc_query->c_d_id;
 	char * c_last = tpcc_query->c_last;
+	uint64_t o_id = tpcc_query->o_id;
 	uint64_t part_id_w = wh_to_part(w_id);
 	uint64_t part_id_c_w = wh_to_part(c_w_id);
 	switch(tpcc_query->txn_type) {
@@ -242,6 +245,106 @@ RC TPCCTxnManager::acquire_locks() {
 				rc2 = get_lock(row, WR);
 				if (rc2 != RCOK) rc = rc2;
 			}
+			break;
+		case TPCC_ORDER_STATUS:
+#if !READONLY_OPTIMIZATION
+			// Cust
+			if (tpcc_query->by_last_name) {
+				key = custNPKey(c_last, d_id, w_id);
+				index = _wl->i_customer_last;
+				item = index_read(index, key, wh_to_part(w_id));
+				row = ((row_t *)item->location);
+				rc2 = get_lock(row, RD);
+				if (rc2 != RCOK) rc = rc2;
+			} else {
+				key = custKey(c_id, d_id, w_id);
+				item = index_read(_wl->i_customer_id, key, wh_to_part(w_id));
+				row = (row_t *) item->location;
+				rc2 = get_lock(row, RD);
+				if (rc2 != RCOK) rc = rc2;
+			}
+			// Order
+			key = orderPrimaryKey(w_id, d_id, o_id);
+			index = _wl->i_order;
+			item = index_read(index, key, wh_to_part(w_id));
+			row = ((row_t *)item->location);
+			rc2 = get_lock(row, RD);
+			if (rc2 != RCOK) rc = rc2;
+			// Order line
+			key = orderlineKey(w_id, d_id, o_id);
+			index = _wl->i_orderline;
+			items = index_read_all(index, key, wh_to_part(w_id), count);
+			for (int i = 0; i < count; i++) {
+				row = ((row_t *)items[i]->location);
+				rc2 = get_lock(row, RD);
+				if (rc2 != RCOK) rc = rc2;
+			}
+			mem_allocator.free(items, sizeof(itemid_t *) * count);
+#endif
+			break;
+		case TPCC_DELIVERY:
+			// New Order
+			key = orderPrimaryKey(w_id, d_id, o_id);
+			index = _wl->i_neworder;
+			item = index_read(index, key, wh_to_part(w_id));
+			row = ((row_t *)item->location);
+			rc2 = get_lock(row, XP);
+			if (rc2 != RCOK) rc = rc2;
+			// Order
+			key = orderPrimaryKey(w_id, d_id, o_id);
+			index = _wl->i_order;
+			item = index_read(index, key, wh_to_part(w_id));
+			row = ((row_t *)item->location);
+			rc2 = get_lock(row, WR);
+			// [ ]: Not good to read from the row here.
+			row->get_value(O_C_ID, c_id);
+			if (rc2 != RCOK) rc = rc2;
+			// Order line
+			key = orderlineKey(w_id, d_id, o_id);
+			index = _wl->i_orderline;
+			items = index_read_all(index, key, wh_to_part(w_id), count);
+			for (int i = 0; i < count; i++) {
+				row = ((row_t *)items[i]->location);
+				rc2 = get_lock(row, WR);
+				if (rc2 != RCOK) rc = rc2;
+			}
+			mem_allocator.free(items, sizeof(itemid_t *) * count);
+			// Cust
+			key = custKey(c_id, d_id, w_id);
+			item = index_read(_wl->i_customer_id, key, wh_to_part(w_id));
+			row = (row_t *) item->location;
+			rc2 = get_lock(row, WR);
+			if (rc2 != RCOK) rc = rc2;
+			break;
+		case TPCC_STOCK_LEVEL:
+#if !READONLY_OPTIMIZATION
+			// Dist
+			key = distKey(d_id, w_id);
+			item = index_read(_wl->i_district, key, wh_to_part(w_id));
+			row = ((row_t *)item->location);
+			rc2 = get_lock(row, RD);
+			if (rc2 != RCOK) rc = rc2;
+			// Order line
+			key = orderlineKey(w_id, d_id, o_id);
+			index = _wl->i_orderline;
+			items = index_read_all(index, key, wh_to_part(w_id), count);
+			for (int i = 0; i < count; i++) {
+				row = ((row_t *)items[i]->location);
+				rc2 = get_lock(row, RD);
+				if (rc2 != RCOK) rc = rc2;
+				uint64_t ol_i_id;
+				// [ ]: Not good to read from the row here.
+				row->get_value(OL_I_ID, ol_i_id);
+				// Stock
+				key = stockKey(ol_i_id, w_id);
+				index = _wl->i_stock;
+				item = index_read(index, key, wh_to_part(w_id));
+				row = ((row_t *)item->location);
+				rc2 = get_lock(row, RD);
+				if (rc2 != RCOK) rc = rc2;
+			}
+			mem_allocator.free(items, sizeof(itemid_t *) * count);
+#endif
 			break;
 		default:
 			assert(false);
@@ -1952,13 +2055,14 @@ RC TPCCTxnManager::run_tpcc_phase2() {
 	//uint64_t d_w_id = tpcc_query->d_w_id;
 	//uint64_t c_w_id = tpcc_query->c_w_id;
 	//uint64_t c_d_id = tpcc_query->c_d_id;
-	//char * c_last = tpcc_query->c_last;
+	char * c_last = tpcc_query->c_last;
 	//double h_amount = tpcc_query->h_amount;
-	//bool by_last_name = tpcc_query->by_last_name;
+	bool by_last_name = tpcc_query->by_last_name;
 	bool remote = tpcc_query->remote;
 	uint64_t ol_cnt = tpcc_query->ol_cnt;
 	uint64_t o_entry_d = tpcc_query->o_entry_d;
-	//uint64_t o_id = tpcc_query->o_id;
+	uint64_t o_id = tpcc_query->o_id;
+	uint64_t threshold = tpcc_query->threshold;
 
 	uint64_t part_id_w = wh_to_part(w_id);
 	//uint64_t part_id_c_w = wh_to_part(c_w_id);
@@ -1994,6 +2098,23 @@ RC TPCCTxnManager::run_tpcc_phase2() {
 					}
 				}
 				break;
+		case TPCC_ORDER_STATUS:
+			assert(w_loc);
+			rc = run_order_status_0(w_id, d_id, by_last_name, c_id, c_last, row);
+			rc = run_order_status_1(w_id, d_id, o_id, row);
+			rc = run_order_status_2(w_id, d_id, o_id, row_count, rows);
+			mem_allocator.free(rows, sizeof(row_t *) * row_count);
+			break;
+		case TPCC_DELIVERY:
+			break;
+		case TPCC_STOCK_LEVEL:
+			assert(w_loc);
+			rc = run_stock_level_0(w_id, d_id, o_id, row);
+			// rc = run_stock_level_1(w_id, d_id, tpcc_query->o_id + 1, row_count, rows);
+			rc = run_stock_level_1(w_id, d_id, o_id, row_count, rows);
+			rc = run_stock_level_2(threshold, row_count, rows);
+			mem_allocator.free(rows, sizeof(row_t *) * row_count);
+			break;
 		default:
 			assert(false);
 	}
@@ -2018,6 +2139,8 @@ RC TPCCTxnManager::run_tpcc_phase5() {
 	uint64_t ol_cnt = tpcc_query->ol_cnt;
 	uint64_t o_entry_d = tpcc_query->o_entry_d;
 	uint64_t o_id = tpcc_query->o_id;
+	uint64_t o_carrier_id = tpcc_query->o_carrier_id;
+	uint64_t ol_delivery_d = tpcc_query->ol_delivery_d;
 
 	uint64_t part_id_w = wh_to_part(w_id);
 	uint64_t part_id_c_w = wh_to_part(c_w_id);
@@ -2040,7 +2163,7 @@ RC TPCCTxnManager::run_tpcc_phase5() {
 			break;
 		case TPCC_NEW_ORDER :
 			if(w_loc) {
-				//rc = new_order_4( w_id, d_id, c_id, remote, ol_cnt, o_entry_d, &tpcc_query->o_id, row);
+				rc = new_order_4( w_id, d_id, c_id, remote, ol_cnt, o_entry_d, &tpcc_query->o_id, row);
 				rc = new_order_5( w_id, d_id, c_id, remote, ol_cnt, o_entry_d, &tpcc_query->o_id, row);
 			}
 				for(uint64_t i = 0; i < tpcc_query->ol_cnt; i++) {
@@ -2060,6 +2183,22 @@ RC TPCCTxnManager::run_tpcc_phase5() {
 					}
 				}
 				break;
+		case TPCC_ORDER_STATUS:
+			break;
+		case TPCC_DELIVERY:
+			assert(w_loc);
+			rc = run_delivery_0(w_id, d_id, o_id, row);
+			rc = run_delivery_1(o_id, row);
+			rc = run_delivery_2(w_id, d_id, o_id, c_id, row);
+			rc = run_delivery_3(o_carrier_id, row);
+			rc = run_delivery_4(w_id, d_id, o_id, tpcc_query->ol_amount, row_count, rows);
+			rc = run_delivery_5(ol_delivery_d, row_count, rows);
+			mem_allocator.free(rows, sizeof(row_t *) * row_count);
+			rc = run_delivery_6(w_id, d_id, c_id, row);
+			rc = run_delivery_7(tpcc_query->ol_amount, row);
+			break;
+		case TPCC_STOCK_LEVEL:
+			break;
 		default:
 			assert(false);
 	}

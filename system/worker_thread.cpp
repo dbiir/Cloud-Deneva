@@ -1364,6 +1364,12 @@ RC WorkerThread::process_rfwd(Message * msg) {
   DEBUG("RFWD (%ld,%ld)\n",msg->get_txn_id(),msg->get_batch_id());
   txn_man->txn_stats.remote_wait_time += get_sys_clock() - txn_man->txn_stats.wait_starttime;
   assert(CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == SNAPPER);
+#if WORKLOAD == TPCC
+  TPCCQuery * tpcc_query = (TPCCQuery*)txn_man->query;
+  if (tpcc_query->txn_type == TPCC_NEW_ORDER && txn_man->get_txn_id() % g_node_cnt != g_node_id) {
+    tpcc_query->o_id = ((ForwardMessage*)msg)->o_id;
+  }
+#endif
   int responses_left = txn_man->received_response(((ForwardMessage*)msg)->rc);
   assert(responses_left >=0);
   if(txn_man->calvin_collect_phase_done()) {

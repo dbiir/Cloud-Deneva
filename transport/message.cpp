@@ -699,10 +699,6 @@ void TPCCClientQueryMessage::copy_from_query(BaseQuery * query) {
   ol_cnt = tpcc_query->ol_cnt;
   o_entry_d = tpcc_query->o_entry_d;
 
-  // order status
-  strcpy(c_last,tpcc_query->c_last);
-  by_last_name = tpcc_query->by_last_name;
-
   // delivery
   o_carrier_id = tpcc_query->o_carrier_id;
   ol_delivery_d = tpcc_query->ol_delivery_d;
@@ -1871,6 +1867,7 @@ uint64_t TPCCQueryMessage::get_size() {
     size += sizeof(bool) * 2; // rbk, remote
     size += sizeof(Item_no) * items.size();
     size += sizeof(uint64_t); // items size
+    size += sizeof(uint64_t); //o_id
   }
 
   return size;
@@ -1909,6 +1906,7 @@ void TPCCQueryMessage::copy_from_txn(TxnManager * txn) {
     remote = tpcc_query->remote;
     ol_cnt = tpcc_query->ol_cnt;
     o_entry_d = tpcc_query->o_entry_d;
+    o_id = tpcc_query->o_id;
   }
 
 }
@@ -1945,6 +1943,7 @@ void TPCCQueryMessage::copy_to_txn(TxnManager * txn) {
     tpcc_query->remote = remote;
     tpcc_query->ol_cnt = ol_cnt;
     tpcc_query->o_entry_d = o_entry_d;
+    tpcc_query->o_id = o_id;
   }
 
 
@@ -1989,6 +1988,7 @@ void TPCCQueryMessage::copy_from_buf(char * buf) {
     COPY_VAL(remote,buf,ptr);
     COPY_VAL(ol_cnt,buf,ptr);
     COPY_VAL(o_entry_d,buf,ptr);
+    COPY_VAL(o_id,buf,ptr);
   }
 
  assert(ptr == get_size());
@@ -2028,6 +2028,7 @@ void TPCCQueryMessage::copy_to_buf(char * buf) {
     COPY_BUF(buf,remote,ptr);
     COPY_BUF(buf,ol_cnt,ptr);
     COPY_BUF(buf,o_entry_d,ptr);
+    COPY_BUF(buf,o_id,ptr);
   }
  assert(ptr == get_size());
 }

@@ -1249,7 +1249,9 @@ RC TxnManager::get_lock(row_t * row, access_t type) {
 	if (calvin_locked_rows.contains(row)) {
 		return RCOK;
 	}
-	calvin_locked_rows.add(row);
+	if (type != XP) {
+		calvin_locked_rows.add(row);
+	}
 	RC rc = row->get_lock(type, this);
 	if(rc == WAIT) {
 		INC_STATS(get_thd_id(), txn_wait_cnt, 1);
