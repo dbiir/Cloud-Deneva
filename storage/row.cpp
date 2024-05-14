@@ -529,6 +529,7 @@ RC row_t::get_row(access_t type, TxnManager *txn, Access *access) {
  	DEBUG_M("row_t::get_row SILO alloc \n");
 	txn->cur_row = (row_t *) mem_allocator.alloc(sizeof(row_t));
 	txn->cur_row->init(get_table(), get_part_id());
+	txn->cur_row->set_primary_key(this->get_primary_key());
 	TsType ts_type = (type == RD)? R_REQ : P_REQ;
   INC_STATS(txn->get_thd_id(), trans_cur_row_init_time, get_sys_clock() - init_time);
 
