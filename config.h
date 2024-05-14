@@ -43,8 +43,11 @@
 
 // ! Parameters used to locate distributed performance bottlenecks.
 
+// CLOUD
 #define SINGLE_WRITE_NODE true // Only one node writes data
 #define READONLY_OPTIMIZATION true // No more CC for read-only transaction
+#define VERSION_CNT 5 // The number of versions stored in the tuple
+#define REPLAY_BATCH_SIZE 1000 // The number of transactions replayed in one batch
 
 #define SECOND 130 // Set the queue monitoring time.
 // #define THD_ID_QUEUE

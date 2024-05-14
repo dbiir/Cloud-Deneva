@@ -63,6 +63,12 @@ class Row_hdcc;
 class Row_snapper;
 class Row_aria;
 
+struct version {
+	uint64_t batch_id;
+	uint64_t valid_until;
+	char * data;
+};
+
 class row_t {
 public:
 	RC init(table_t * host_table, uint64_t part_id, uint64_t row_id = 0);
@@ -162,6 +168,8 @@ public:
 	char * data;
 	int tuple_size;
 	table_t * table;
+	version * versions;
+	uint64_t cur_ver;
 private:
 	// primary key should be calculated from the data stored in the row.
 	uint64_t 		_primary_key;

@@ -46,6 +46,7 @@
 #include "pool.h"
 #include "txn_table.h"
 #include "logger.h"
+#include "replay.h"
 #include "sim_manager.h"
 
 #include <boost/lockfree/queue.hpp>
@@ -87,6 +88,7 @@ class Client_txn;
 class Sequencer;
 class AriaSequencer;
 class Logger;
+class Replay;
 class TimeTable;
 class InOutTable;
 class WkdbTimeTable;
@@ -141,6 +143,7 @@ extern Client_txn client_man;
 extern Sequencer seq_man;
 extern AriaSequencer aria_seq;
 extern Logger logger;
+extern Replay replay;
 extern TimeTable time_table;
 extern DtaTimeTable dta_time_table;
 extern KeyXidCache dta_key_xid_cache;
@@ -220,6 +223,10 @@ extern int32_t g_inflight_max;
 extern uint64_t g_msg_size;
 extern uint64_t g_log_buf_max;
 extern uint64_t g_log_flush_timeout;
+
+// CLOUD
+extern uint64_t g_version_cnt;
+extern uint64_t g_replay_batch_size;
 
 extern UInt32 g_max_txn_per_part;
 extern int32_t g_load_per_server;
@@ -358,6 +365,7 @@ enum RemReqType {
     CONF_STAT,
     REQ_VALID,
     VALID,
+    RPDONE,
   NO_MSG
 };
 

@@ -54,7 +54,7 @@ int main(int argc, char *argv[]) {
         printf("Done\n");
     }
     Workload * m_wl;
-    if (g_node_id >= g_node_cnt + g_client_node_cnt + g_storage_log_node_cnt) {
+    if (g_storage_all_in_one || g_node_id >= g_node_cnt + g_client_node_cnt + g_storage_log_node_cnt) {
         printf("Initializing storage manager... ");
         fflush(stdout);
         switch (WORKLOAD) {
@@ -70,6 +70,9 @@ int main(int argc, char *argv[]) {
         m_wl->init();
         printf("workload initialized!\n");
     }
+    printf("Initializing replay...");
+    fflush(stdout);
+    replay.init(m_wl);
     printf("Initializing work queue... ");
     fflush(stdout);
     work_queue.init();

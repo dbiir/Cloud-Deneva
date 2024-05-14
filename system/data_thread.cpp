@@ -7,8 +7,9 @@ void DataThread::setup() {
 }
 
 RC DataThread::run() {
-    // uint64_t id = get_thd_id() - g_thread_cnt - g_rem_thread_cnt - g_send_thread_cnt;
     tsetup();
-    while (!simulation->is_done()) {}
+    while (!simulation->is_done()) {
+        replay.replay_log(get_thd_id());
+    }
     return FINISH;
 }

@@ -195,6 +195,7 @@ Message * Message::create_message(RemReqType rtype) {
     case RFWD:
       msg = new ForwardMessage;
       break;
+    case RPDONE:
     case RDONE:
       msg = new DoneMessage;
       break;
@@ -1618,7 +1619,10 @@ void FinishMessage::copy_to_buf(char * buf) {
 
 /************************/
 
-void LogMessage::release() {}
+void LogMessage::release() {
+  mem_allocator.free(image_size, sizeof(LogRecord *) * record_cnt);
+  mem_allocator.free(records, sizeof(LogRecord *) * record_cnt);
+}
 
 uint64_t LogMessage::get_size() {
   uint64_t size = Message::mget_size();

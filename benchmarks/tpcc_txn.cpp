@@ -1436,7 +1436,7 @@ inline RC TPCCTxnManager::new_order_9(uint64_t w_id, uint64_t d_id, bool remote,
 	return RCOK;
 }
 
-RC TPCCTxnManager::run_order_status_0(uint64_t w_id, uint64_t d_id, bool by_last_name, uint64_t c_id, char* c_last,
+inline RC TPCCTxnManager::run_order_status_0(uint64_t w_id, uint64_t d_id, bool by_last_name, uint64_t c_id, char* c_last,
                    row_t*& r_cust_local) {
 	uint64_t starttime = get_sys_clock();
 	RC rc;
@@ -1457,7 +1457,7 @@ RC TPCCTxnManager::run_order_status_0(uint64_t w_id, uint64_t d_id, bool by_last
 	return rc;
 }
 
-RC TPCCTxnManager::run_order_status_1(uint64_t w_id, uint64_t d_id, uint64_t& o_id, row_t*& r_orders) {
+inline RC TPCCTxnManager::run_order_status_1(uint64_t w_id, uint64_t d_id, uint64_t& o_id, row_t*& r_orders) {
 	uint64_t starttime = get_sys_clock();
 	uint64_t key = orderPrimaryKey(w_id, d_id, o_id);
 	itemid_t * item;
@@ -1470,7 +1470,7 @@ RC TPCCTxnManager::run_order_status_1(uint64_t w_id, uint64_t d_id, uint64_t& o_
 	return rc;
 }
 
-RC TPCCTxnManager::run_order_status_2(uint64_t w_id, uint64_t d_id, uint64_t o_id, uint64_t &row_count, row_t **&l_order_local) {
+inline RC TPCCTxnManager::run_order_status_2(uint64_t w_id, uint64_t d_id, uint64_t o_id, uint64_t &row_count, row_t **&l_order_local) {
 	uint64_t starttime = get_sys_clock();
 	RC rc;
 	itemid_t ** items;
@@ -1490,7 +1490,7 @@ RC TPCCTxnManager::run_order_status_2(uint64_t w_id, uint64_t d_id, uint64_t o_i
 	return rc;
 }
 
-RC TPCCTxnManager::run_delivery_0(uint64_t w_id, uint64_t d_id, uint64_t &o_id, row_t*& r_neworder_local) {
+inline RC TPCCTxnManager::run_delivery_0(uint64_t w_id, uint64_t d_id, uint64_t &o_id, row_t*& r_neworder_local) {
 	uint64_t starttime = get_sys_clock();
 	uint64_t key = orderPrimaryKey(w_id, d_id, o_id);
 	itemid_t * item;
@@ -1503,7 +1503,7 @@ RC TPCCTxnManager::run_delivery_0(uint64_t w_id, uint64_t d_id, uint64_t &o_id, 
 	return rc;
 }
 
-RC TPCCTxnManager::run_delivery_1(uint64_t &no_o_id, row_t *&r_new_order_local) {
+inline RC TPCCTxnManager::run_delivery_1(uint64_t &no_o_id, row_t *&r_new_order_local) {
 	uint64_t starttime = get_sys_clock();
 	assert(r_new_order_local != NULL);
 	no_o_id = *(int64_t *) r_new_order_local->get_value(NO_O_ID);
@@ -1516,7 +1516,7 @@ RC TPCCTxnManager::run_delivery_1(uint64_t &no_o_id, row_t *&r_new_order_local) 
 	return RCOK;
 }
 
-RC TPCCTxnManager::run_delivery_2(uint64_t o_w_id, uint64_t o_d_id, uint64_t no_o_id, uint64_t &c_id, row_t *&l_order_local) {
+inline RC TPCCTxnManager::run_delivery_2(uint64_t o_w_id, uint64_t o_d_id, uint64_t no_o_id, uint64_t &c_id, row_t *&l_order_local) {
 	uint64_t starttime = get_sys_clock();
 	uint64_t key = orderPrimaryKey(o_w_id, o_d_id, no_o_id);
 	itemid_t * item;
@@ -1531,7 +1531,7 @@ RC TPCCTxnManager::run_delivery_2(uint64_t o_w_id, uint64_t o_d_id, uint64_t no_
 	return rc;
 }
 
-RC TPCCTxnManager::run_delivery_3(uint64_t o_carrier_id, row_t *&l_order_local) {
+inline RC TPCCTxnManager::run_delivery_3(uint64_t o_carrier_id, row_t *&l_order_local) {
 	uint64_t starttime = get_sys_clock();
 	assert(l_order_local != NULL);
 	uint64_t old_value;
@@ -1545,7 +1545,7 @@ RC TPCCTxnManager::run_delivery_3(uint64_t o_carrier_id, row_t *&l_order_local) 
 	return RCOK;
 }
 
-RC TPCCTxnManager::run_delivery_4(uint64_t o_w_id, uint64_t o_d_id, uint64_t no_o_id, uint64_t &sum_amount, uint64_t &row_count, row_t **&l_orderline_local) {
+inline RC TPCCTxnManager::run_delivery_4(uint64_t o_w_id, uint64_t o_d_id, uint64_t no_o_id, uint64_t &sum_amount, uint64_t &row_count, row_t **&l_orderline_local) {
 	uint64_t starttime = get_sys_clock();
 	RC rc;
 	itemid_t ** items;
@@ -1569,7 +1569,7 @@ RC TPCCTxnManager::run_delivery_4(uint64_t o_w_id, uint64_t o_d_id, uint64_t no_
 	return rc;
 }
 
-RC TPCCTxnManager::run_delivery_5(uint64_t ol_delivery_d, uint64_t &row_count, row_t **&l_orderline_local) {
+inline RC TPCCTxnManager::run_delivery_5(uint64_t ol_delivery_d, uint64_t &row_count, row_t **&l_orderline_local) {
 	uint64_t starttime = get_sys_clock();
 	for (uint64_t i = 0; i < row_count; i++) {
 		uint64_t old_value;
@@ -1584,7 +1584,7 @@ RC TPCCTxnManager::run_delivery_5(uint64_t ol_delivery_d, uint64_t &row_count, r
 	return RCOK;
 }
 
-RC TPCCTxnManager::run_delivery_6(uint64_t c_w_id, uint64_t c_d_id, uint64_t c_id, row_t *&r_cust_local) {
+inline RC TPCCTxnManager::run_delivery_6(uint64_t c_w_id, uint64_t c_d_id, uint64_t c_id, row_t *&r_cust_local) {
 	uint64_t starttime = get_sys_clock();
 	uint64_t key = custKey(c_id, c_d_id, c_w_id);
 	itemid_t * item;
@@ -1597,7 +1597,7 @@ RC TPCCTxnManager::run_delivery_6(uint64_t c_w_id, uint64_t c_d_id, uint64_t c_i
 	return rc;
 }
 
-RC TPCCTxnManager::run_delivery_7(uint64_t &sum_amount, row_t *&r_cust_local) {
+inline RC TPCCTxnManager::run_delivery_7(uint64_t &sum_amount, row_t *&r_cust_local) {
 	uint64_t starttime = get_sys_clock();
 	assert(r_cust_local != NULL);
 	double c_balance;
@@ -1612,7 +1612,7 @@ RC TPCCTxnManager::run_delivery_7(uint64_t &sum_amount, row_t *&r_cust_local) {
 	return RCOK;
 }
 
-RC TPCCTxnManager::run_stock_level_0(uint64_t w_id, uint64_t d_id, uint64_t &d_next_o_id, row_t *&r_dist_local) {
+inline RC TPCCTxnManager::run_stock_level_0(uint64_t w_id, uint64_t d_id, uint64_t &d_next_o_id, row_t *&r_dist_local) {
 	uint64_t starttime = get_sys_clock();
 	uint64_t key = distKey(d_id, w_id);
 	itemid_t * item;
@@ -1627,7 +1627,7 @@ RC TPCCTxnManager::run_stock_level_0(uint64_t w_id, uint64_t d_id, uint64_t &d_n
 	return rc;
 }
 
-RC TPCCTxnManager::run_stock_level_1(uint64_t w_id, uint64_t d_id, uint64_t d_next_o_id, uint64_t &item_count, row_t **&r_orderline_local) {
+inline RC TPCCTxnManager::run_stock_level_1(uint64_t w_id, uint64_t d_id, uint64_t d_next_o_id, uint64_t &item_count, row_t **&r_orderline_local) {
 	uint64_t starttime = get_sys_clock();
 	RC rc;
 	itemid_t ** items;
@@ -1647,7 +1647,7 @@ RC TPCCTxnManager::run_stock_level_1(uint64_t w_id, uint64_t d_id, uint64_t d_ne
 	return rc;
 }
 
-RC TPCCTxnManager::run_stock_level_2(uint64_t threshold, uint64_t &item_count, row_t **&r_local) {
+inline RC TPCCTxnManager::run_stock_level_2(uint64_t threshold, uint64_t &item_count, row_t **&r_local) {
 	uint64_t starttime = get_sys_clock();
 	RC rc;
 	INDEX * index = _wl->i_stock;

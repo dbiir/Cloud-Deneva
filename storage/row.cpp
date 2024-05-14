@@ -53,11 +53,18 @@ RC row_t::init(table_t *host_table, uint64_t part_id, uint64_t row_id) {
 	this->table = host_table;
 	Catalog * schema = host_table->get_schema();
 	tuple_size = schema->get_tuple_size();
+	versions = (version *)mem_allocator.alloc(sizeof(version) * g_version_cnt);
+	for (uint64_t i = 0; i < g_version_cnt; i++) {
+		versions[i].batch_id = 0;
+		versions[i].valid_until = UINT64_MAX;
 #if SIM_FULL_ROW
-	data = (char *) mem_allocator.alloc(sizeof(char) * tuple_size);
+		versions[i].data = (char *)mem_allocator.alloc(tuple_size);
 #else
-	data = (char *) mem_allocator.alloc(sizeof(uint64_t) * 1);
+		versions[i].data = (char *) mem_allocator.alloc(sizeof(uint64_t) * 1);
 #endif
+	}
+	cur_ver = 0;
+	data = versions[cur_ver].data;
 	return RCOK;
 }
 
@@ -211,11 +218,14 @@ void row_t::copy(row_t * src) {
 
 void row_t::free_row() {
 	DEBUG_M("row_t::free_row free\n");
+	for (uint64_t i = 0; i < g_version_cnt; i++) {
 #if SIM_FULL_ROW
-	mem_allocator.free(data, sizeof(char) * get_tuple_size());
+		mem_allocator.free(versions[i].data, tuple_size);
 #else
-	mem_allocator.free(data, sizeof(uint64_t) * 1);
+		mem_allocator.free(versions[i].data, sizeof(uint64_t) * 1);
 #endif
+	}
+	mem_allocator.free(versions, sizeof(version) * g_version_cnt);
 }
 
 void row_t::free_manager() {
