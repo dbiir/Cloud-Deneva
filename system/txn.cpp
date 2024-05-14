@@ -317,7 +317,7 @@ void Transaction::do_delete() {
 		delete_rows[i].second->index_read(row->get_primary_key(), m_item, row->get_part_id(), 0);
 		assert(m_item != NULL);
 		// m_item->valid = false;
-		insert_rows[i].second->index_remove(row->get_primary_key(), row->get_part_id());
+		delete_rows[i].second->index_remove(row->get_primary_key(), row->get_part_id());
 	}
 }
 

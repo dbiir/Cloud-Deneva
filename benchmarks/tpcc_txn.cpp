@@ -1498,7 +1498,7 @@ RC TPCCTxnManager::run_delivery_0(uint64_t w_id, uint64_t d_id, uint64_t &o_id, 
 	item = index_read(index, key, wh_to_part(w_id));
 	assert(item != NULL);
 	row_t * row = ((row_t *)item->location);
-	RC rc = get_row(row, WR, r_neworder_local);
+	RC rc = get_row(row, XP, r_neworder_local);
 	INC_STATS(get_thd_id(),trans_benchmark_compute_time,get_sys_clock() - starttime);
 	return rc;
 }
@@ -1507,14 +1507,13 @@ RC TPCCTxnManager::run_delivery_1(uint64_t &no_o_id, row_t *&r_new_order_local) 
 	uint64_t starttime = get_sys_clock();
 	assert(r_new_order_local != NULL);
 	no_o_id = *(int64_t *) r_new_order_local->get_value(NO_O_ID);
-	INDEX * index = _wl->i_neworder;
-	RC rc = index->index_remove(r_new_order_local->get_primary_key(), wh_to_part(0));
+	delete_row(r_new_order_local, _wl->i_neworder);
 #if SINGLE_WRITE_NODE
 	LogRecord * log_record = logger.createRecord(get_txn_id(), L_DELETE, r_new_order_local->get_table()->get_table_id(), r_new_order_local->get_primary_key(), 0, 1);
 	log_records.push_back(log_record);
 #endif
 	INC_STATS(get_thd_id(),trans_benchmark_compute_time,get_sys_clock() - starttime);
-	return rc;
+	return RCOK;
 }
 
 RC TPCCTxnManager::run_delivery_2(uint64_t o_w_id, uint64_t o_d_id, uint64_t no_o_id, uint64_t &c_id, row_t *&l_order_local) {
