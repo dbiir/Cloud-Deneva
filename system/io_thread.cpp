@@ -275,6 +275,11 @@ RC InputThread::server_recv_loop() {
 				continue;
 			}
 #endif
+			if (msg->rtype == RPDONE) {
+				simulation->flushed_batch = ((DoneMessage *)msg)->batch_id;
+				msgs->erase(msgs->begin());
+				continue;
+			}
 #ifdef FAKE_PROCESS
 			if (fakeprocess(msg))
 #endif

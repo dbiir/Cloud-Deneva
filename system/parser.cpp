@@ -284,4 +284,7 @@ void parser(int argc, char * argv[]) {
     // Initialize client-specific globals
   if (g_node_id >= g_node_cnt) init_client_globals();
     init_globals();
+  if (ISSTORAGE) {
+    g_servers_per_storage = g_node_cnt / g_storage_node_cnt;
+  }
 }

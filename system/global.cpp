@@ -203,6 +203,7 @@ UInt32 g_client_dynamic_thread_cnt = DYNAMIC_FLAG;
 UInt32 g_servers_per_client = 0;
 UInt32 g_clients_per_server = 0;
 UInt32 g_server_start_node = 0;
+UInt32 g_servers_per_storage = 0;
 
 UInt32 g_storage_node_cnt = STORAGE_NODE_CNT;
 UInt32 g_storage_thread_cnt = STORAGE_THREAD_CNT;

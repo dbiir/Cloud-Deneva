@@ -36,7 +36,7 @@ void Replay::replay_log(uint64_t thd_id) {
                 if (ATOM_CAS(txn_cnt, cnt, new_cnt)) {
                     if (next_batch) {
                         batch_id ++;
-                        // notify_compute_node(thd_id);
+                        notify_compute_node(thd_id);
                     }
                     break;
                 }
@@ -136,8 +136,8 @@ void Replay::replay_log(uint64_t thd_id) {
 }
 
 void Replay::notify_compute_node(uint64_t thd_id) {
-    for (uint64_t i = 0; i < g_node_cnt; i++) {
-        Message * msg = Message::create_message(RDONE);
+    for (uint64_t i = g_servers_per_storage * (g_node_id - g_node_cnt - g_client_node_cnt); i < g_node_cnt || i < g_servers_per_storage * (g_node_id - g_node_cnt - g_client_node_cnt + 1); i++) {
+        Message * msg = Message::create_message(RPDONE);
         ((DoneMessage *)msg)->batch_id = batch_id;
         msg_queue.enqueue(thd_id, msg, i);
     }

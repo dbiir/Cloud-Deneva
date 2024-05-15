@@ -31,6 +31,7 @@ void SimManager::init() {
 	worker_epoch = 1;
 	seq_epoch = 0;
 	rsp_cnt = g_total_node_cnt - 1;
+	flushed_batch = 0;
 	aria_phase = ARIA_INIT;
 	batch_process_count = 0;
 	barrier_count = 0;

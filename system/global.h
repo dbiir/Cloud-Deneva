@@ -183,6 +183,7 @@ extern UInt32 g_storage_send_thread_cnt;
 extern bool g_storage_all_in_one;
 extern UInt32 g_storage_log_node_cnt;
 extern UInt32 g_storage_log_thread_cnt;
+extern UInt32 g_servers_per_storage;
 
 /******************************************/
 // Global Parameter

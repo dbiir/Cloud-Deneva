@@ -441,6 +441,7 @@ void Message::release_message(Message * msg) {
       delete m_msg;
       break;
                }
+    case RPDONE:
     case RDONE: {
       DoneMessage * m_msg = (DoneMessage*)msg;
       m_msg->release();
