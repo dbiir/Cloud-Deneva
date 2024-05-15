@@ -105,10 +105,10 @@ void Replay::replay_log(uint64_t thd_id) {
                     memcpy(data + pos, after_image, image_size);
                     mem_allocator.free(after_image, image_size);
                 } else {
+                    row->versions[row->cur_ver].valid_until = batch_id;
                     uint64_t old_ver = row->cur_ver;
                     row->cur_ver = (row->cur_ver + 1) % g_version_cnt;
                     memcpy(row->versions[row->cur_ver].data, row->versions[old_ver].data, row->get_tuple_size());
-                    row->versions[row->cur_ver].batch_id = batch_id;
                     row->data = row->versions[row->cur_ver].data;
                     char * data = row->get_data();
                     int pos = row->get_schema()->get_field_index(record->rcd.start_feild_id);
@@ -116,6 +116,8 @@ void Replay::replay_log(uint64_t thd_id) {
                     memcpy(after_image, record->rcd.before_and_after_image + image_size, image_size);
                     memcpy(data + pos, after_image, image_size);
                     mem_allocator.free(after_image, image_size);
+                    row->versions[row->cur_ver].batch_id = batch_id;
+                    row->versions[row->cur_ver].valid_until = UINT64_MAX;
                 }
             } else if(record->rcd.iud == L_INSERT) {
                 row_t * row;
