@@ -385,6 +385,9 @@ RC YCSBTxnManager::run_ycsb_1(access_t acctype, row_t * row_local) {
 
   } else {
     assert(acctype == WR);
+#if CC_ALG == CALVIN
+    next_batch(row_local);
+#endif
 		int fid = 0;
 	  char * data = row_local->get_data();
 	  *(uint64_t *)(&data[fid * 100]) = 0;

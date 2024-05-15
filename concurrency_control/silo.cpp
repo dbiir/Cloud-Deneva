@@ -176,6 +176,7 @@ TxnManager::finish(RC rc)
 		
 		for (uint64_t i = 0; i < txn->write_cnt; i++) {
 			Access * access = txn->accesses[ write_set[i] ];
+			next_batch(access->orig_row);
 			access->orig_row->manager->write( 
 				access->data, this->commit_timestamp );
 			txn->accesses[ write_set[i] ]->orig_row->manager->release();

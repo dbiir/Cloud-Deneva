@@ -888,6 +888,9 @@ inline RC TPCCTxnManager::run_payment_1(uint64_t w_id, uint64_t d_id, uint64_t d
 	}
 #endif
 	if (g_wh_update) {
+#if CC_ALG == CALVIN
+    	next_batch(r_wh_local);
+#endif
 		double update_value = w_ytd + h_amount;
 		r_wh_local->set_value(W_YTD, update_value);
 #if SINGLE_WRITE_NODE
@@ -939,6 +942,9 @@ inline RC TPCCTxnManager::run_payment_3(uint64_t w_id, uint64_t d_id, uint64_t d
 	if (algo == CALVIN) {
 		row->manager->isIntermediateState = true;
 	}
+#endif
+#if CC_ALG == CALVIN
+    next_batch(r_dist_local);
 #endif
 	double update_value = d_ytd + h_amount;
 	r_dist_local->set_value(D_YTD, update_value);
@@ -1052,6 +1058,9 @@ inline RC TPCCTxnManager::run_payment_5(uint64_t w_id, uint64_t d_id, uint64_t c
 	double c_ytd_payment;
 	double c_payment_cnt;
 
+#if CC_ALG == CALVIN
+    next_batch(r_cust_local);
+#endif
 	r_cust_local->get_value(C_BALANCE, c_balance);
 	double new_balance = c_balance - h_amount;
 	r_cust_local->set_value(C_BALANCE, new_balance);
@@ -1213,6 +1222,9 @@ inline RC TPCCTxnManager::new_order_5(uint64_t w_id, uint64_t d_id, uint64_t c_i
 	*o_id = *(int64_t *) r_dist_local->get_value(D_NEXT_O_ID);
 	int64_t new_o_id = (*o_id) + 1;
 	// (*o_id) ++;
+#if CC_ALG == CALVIN
+    next_batch(r_dist_local);
+#endif
 	r_dist_local->set_value(D_NEXT_O_ID, new_o_id);
 #if SINGLE_WRITE_NODE
 	LogRecord * log_record = logger.createRecord(get_txn_id(), L_UPDATE, r_dist_local->get_table()->get_table_id(), r_dist_local->get_primary_key(), D_NEXT_O_ID, 8, o_id, &new_o_id);
@@ -1354,6 +1366,9 @@ inline RC TPCCTxnManager::new_order_9(uint64_t w_id, uint64_t d_id, bool remote,
 		// XXX s_dist_xx are not retrieved.
 	UInt64 s_quantity;
 	int64_t s_remote_cnt;
+#if CC_ALG == CALVIN
+    next_batch(r_stock_local);
+#endif
 	s_quantity = *(int64_t *)r_stock_local->get_value(S_QUANTITY);
 #if !TPCC_SMALL
 	int64_t s_ytd;
@@ -1536,6 +1551,9 @@ inline RC TPCCTxnManager::run_delivery_3(uint64_t o_carrier_id, row_t *&l_order_
 	assert(l_order_local != NULL);
 	uint64_t old_value;
 	l_order_local->get_value(O_CARRIER_ID, old_value);
+#if CC_ALG == CALVIN
+    next_batch(l_order_local);
+#endif
 	l_order_local->set_value(O_CARRIER_ID, o_carrier_id);
 #if SINGLE_WRITE_NODE
 	LogRecord * log_record = logger.createRecord(get_txn_id(), L_UPDATE, l_order_local->get_table()->get_table_id(), l_order_local->get_primary_key(), O_CARRIER_ID, 8, &old_value, &o_carrier_id);
@@ -1574,6 +1592,9 @@ inline RC TPCCTxnManager::run_delivery_5(uint64_t ol_delivery_d, uint64_t &row_c
 	for (uint64_t i = 0; i < row_count; i++) {
 		uint64_t old_value;
 		l_orderline_local[i]->get_value(OL_DELIVERY_D, old_value);
+#if CC_ALG == CALVIN
+    	next_batch(l_orderline_local[i]);
+#endif
 		l_orderline_local[i]->set_value(OL_DELIVERY_D, ol_delivery_d);
 #if SINGLE_WRITE_NODE
 		LogRecord * log_record = logger.createRecord(get_txn_id(), L_UPDATE, l_orderline_local[i]->get_table()->get_table_id(), l_orderline_local[i]->get_primary_key(), OL_DELIVERY_D, 8, &old_value, &ol_delivery_d);
@@ -1602,6 +1623,9 @@ inline RC TPCCTxnManager::run_delivery_7(uint64_t &sum_amount, row_t *&r_cust_lo
 	assert(r_cust_local != NULL);
 	double c_balance;
 	r_cust_local->get_value(C_BALANCE, c_balance);
+#if CC_ALG == CALVIN
+    next_batch(r_cust_local);
+#endif
 	double new_balance = c_balance + sum_amount;
 	r_cust_local->set_value(C_BALANCE, new_balance);
 #if SINGLE_WRITE_NODE

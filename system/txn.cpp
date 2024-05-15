@@ -1714,3 +1714,15 @@ void TxnManager::release_locks(RC rc) {
 	uint64_t timespan = (get_sys_clock() - starttime);
 	INC_STATS(get_thd_id(), txn_cleanup_time,  timespan);
 }
+
+void TxnManager::next_batch(row_t * row) {
+	if (row->versions[row->cur_ver].batch_id != txn->batch_id) {
+      row->versions[row->cur_ver].valid_until = txn->batch_id;
+	  uint64_t old_ver = row->cur_ver;
+      row->cur_ver = (row->cur_ver + 1) % g_version_cnt;
+	  memcpy(row->versions[row->cur_ver].data, row->versions[old_ver].data, row->get_schema()->get_tuple_size());
+      row->versions[row->cur_ver].batch_id = txn->batch_id;
+      row->versions[row->cur_ver].valid_until = UINT64_MAX;
+      row->data = row->versions[row->cur_ver].data;
+    }
+}

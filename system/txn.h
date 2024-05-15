@@ -196,6 +196,8 @@ public:
 	uint64_t        incr_lr();
 	uint64_t        decr_lr();
 
+	void			next_batch(row_t *);
+
 	RC commit();
 	RC start_commit();
 	RC start_abort();
