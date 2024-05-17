@@ -43,7 +43,7 @@
 
 // ! Parameters used to locate distributed performance bottlenecks.
 
-#define SINGLE_WRITE_NODE true // Only one node writes data
+#define SINGLE_WRITE_NODE false // Only one node writes data
 #define READONLY_OPTIMIZATION true // No more CC for read-only transaction
 
 #define SECOND 130 // Set the queue monitoring time.
@@ -68,8 +68,8 @@
 /***********************************************/
 // Simulation + Hardware
 /***********************************************/
-#define NODE_CNT 16
-#define THREAD_CNT 4
+#define NODE_CNT 1
+#define THREAD_CNT 16
 #define REM_THREAD_CNT 2
 #define SEND_THREAD_CNT 2
 #define LOGGER_THREAD_CNT 3
@@ -115,7 +115,7 @@
 // # of transactions to run for warmup
 #define WARMUP            0
 // YCSB or TPCC or PPS or DA
-#define WORKLOAD YCSB
+#define WORKLOAD TPCC
 // print the transaction latency distribution
 #define PRT_LAT_DISTR false
 #define STATS_ENABLE        true
@@ -173,9 +173,9 @@
 // Concurrency Control
 /***********************************************/
 
-// WAIT_DIE, NO_WAIT, TIMESTAMP, MVCC, CALVIN, MAAT, WOOKONG, TICTOC, SI
+// WAIT_DIE, NO_WAIT, TIMESTAMP, MVCC, CALVIN, MAAT, WOOKONG, TICTOC, SI, CALVIN_W
 #define ISOLATION_LEVEL SERIALIZABLE
-#define CC_ALG HDCC
+#define CC_ALG CALVIN
 #define YCSB_ABORT_MODE false
 #define QUEUE_CAPACITY_NEW 1000000
 // all transactions acquire tuples according to the primary key order.
@@ -214,6 +214,9 @@
 #define TXN_QUEUE_SIZE_LIMIT    THREAD_CNT
 // [CALVIN]
 #define SEQ_THREAD_CNT 4
+// [CALVIN_W]
+#define SEQ_BATCH_SIZE 100    
+#define CAL_LOCK_CNT 2        
 // [HDCC]
 #define CALVIN_THREAD_CNT 1
 #define SHARD_SIZE 100000
@@ -281,10 +284,10 @@
 #define DATA_PERC 100
 #define ACCESS_PERC 0.03
 #define INIT_PARALLELISM 8
-#define SYNTH_TABLE_SIZE 8388608
-#define ZIPF_THETA 0.6
+#define SYNTH_TABLE_SIZE 16777216
+#define ZIPF_THETA 0.99
 #define TXN_WRITE_PERC 1
-#define TUP_WRITE_PERC 0.5
+#define TUP_WRITE_PERC 0.2
 #define SCAN_PERC           0
 #define SCAN_LEN          20
 #define PART_PER_TXN 2
@@ -307,11 +310,11 @@
 // are not modeled.
 #define TPCC_ACCESS_ALL       false
 #define WH_UPDATE         false
-#define NUM_WH PART_CNT
+#define NUM_WH 8
 // % of transactions that access multiple partitions
-#define MPR 1.0
+#define MPR 0
 #define MPIR 0.01
-#define MPR_NEWORDER      20 // In %
+#define MPR_NEWORDER MPR
 enum TPCCTable {
   TPCC_WAREHOUSE,
           TPCC_DISTRICT,
@@ -341,7 +344,7 @@ enum DATxnType {
 
 
 #define TPCC_ALL true
-#define PERC_PAYMENT 0.0
+#define PERC_PAYMENT 0.489
 #define FIRSTNAME_MINLEN      8
 #define FIRSTNAME_LEN         16
 #define LASTNAME_LEN        16
@@ -452,6 +455,7 @@ enum PPSTxnType {
 #define HDCC 29
 #define SNAPPER 30
 #define ARIA 31
+#define CALVIN_W 32
 // TIMESTAMP allocation method.
 #define TS_MUTEX          1
 #define TS_CAS            2
@@ -499,8 +503,8 @@ enum PPSTxnType {
 #define PROG_TIMER 10 * BILLION // in s
 #define BATCH_TIMER 0
 #define SEQ_BATCH_TIMER 5 * 1 * MILLION // ~5ms -- same as CALVIN paper
-#define DONE_TIMER 1 * 60 * BILLION // ~1 minutes
-#define WARMUP_TIMER 1 * 60 * BILLION // ~1 minutes
+#define DONE_TIMER 1 * 30 * BILLION // ~1 minutes
+#define WARMUP_TIMER 1 * 30 * BILLION // ~1 minutes
 #define STATS_EVERY_INTERVAL true
 #define ONE_SECOND 1 * BILLION
 #define SNAPPER_TXN_TIMEOUT 0.1 * MILLION

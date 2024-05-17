@@ -47,7 +47,9 @@ public:
   int algo;
   uint64_t orig_txn_id, orig_batch_id;
 #endif
-
+#if CC_ALG == CALVIN || CC_ALG == CALVIN_W
+  bool is_seq2sto = false;
+#endif
   uint64_t wq_time;
   uint64_t mq_time;
   uint64_t ntwk_time;
@@ -158,9 +160,55 @@ public:
   uint64_t get_size() {return Message::mget_size();}
   void init() {}
   void release() {}
-
 };
 
+// This Class will be used for cloud db.
+// sequencer will send each txn to binded storage by this class message.
+// when storage get a txn , write it to disk , send back a ack message to sequencer.
+// when sequencer get a ack message from storage , this txn can be send to scheduler. 
+class LogCloudTxnMessage : public Message{  
+public:
+  void copy_from_msg(Message * msg);
+  void copy_from_buf(char * buf);
+  void copy_to_buf(char * buf);
+  void copy_from_txn(TxnManager * txn) {Message::mcopy_from_txn(txn);}
+  void copy_to_txn(TxnManager * txn) {Message::mcopy_to_txn(txn);}
+  uint64_t get_size();
+  void init() {}
+  void release() {}
+  // used 4 tpcc
+  uint64_t txn_type;
+    // common txn input for : payment new-order order-staus stock-level delivery
+  uint64_t w_id;
+  uint64_t d_id;
+    // common txn input for : payment new-order 
+  uint64_t c_id;
+    // payment
+  uint64_t d_w_id;
+  uint64_t c_w_id;
+  uint64_t c_d_id;
+	char c_last[LASTNAME_LEN];
+  uint64_t h_amount;
+  bool by_last_name;
+    // new order
+  Array<Item_no*> items;
+  bool rbk;
+  bool remote;
+  uint64_t ol_cnt;
+  uint64_t o_entry_d;
+    // common txn input for : order-status stock-level delivery
+  uint64_t o_id;
+    // delivery
+  uint64_t o_carrier_id;
+  uint64_t ol_delivery_d;
+    // stock-level
+  uint64_t threshold;
+  // used 4 ycsb
+  Array<ycsb_request*> requests;
+  // used 4 record Array count
+  uint64_t array_size1;
+  uint64_t array_size2;
+};
 
 class QueryResponseMessage : public Message {
 public:
@@ -317,7 +365,7 @@ public:
 
   uint64_t pid;
   uint64_t ts;
-#if CC_ALG == CALVIN
+#if CC_ALG == CALVIN || CC_ALG == CALVIN_W
   uint64_t batch_id;
   uint64_t txn_id;
 #endif

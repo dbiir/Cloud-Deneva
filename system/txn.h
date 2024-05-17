@@ -175,6 +175,13 @@ public:
 	virtual void get_read_write_set() {};
 	virtual RC		acquire_lock(row_t * row, access_t acctype) {return RCOK;};
 #endif
+#if CC_ALG == CALVIN_W
+	uint32_t acquired_lock_num = 0; // 用于确定当前事务有多少个数据项获得了锁
+	uint32_t sum_lock_num = 0;		// 当前事务总共有多少个数据项需要在当前节点获得锁
+	bool * lockers_has_watched;
+	bool worker_has_dealed;
+	bool has_ready = false;
+#endif
 	void            register_thread(Thread * h_thd);
 	uint64_t        get_thd_id();
 	Workload *      get_wl();
@@ -203,7 +210,7 @@ public:
 
 	void release_locks(RC rc);
 	bool isRecon() {
-		assert(CC_ALG == CALVIN || !recon);
+		assert(CC_ALG == CALVIN || CC_ALG == CALVIN_W || !recon);
 		return recon;
 	};
 		bool recon;

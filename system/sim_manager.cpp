@@ -28,7 +28,12 @@ void SimManager::init() {
 	txn_cnt = 0;
 	inflight_cnt = 0;
 	epoch_txn_cnt = 0;
+#if CC_ALG != CALVIN_W
 	worker_epoch = 1;
+#else
+	workers_epoch = (uint64_t*)std::malloc(sizeof(uint64_t)*g_sched_thread_cnt);
+	for(UInt32 i = 0 ; i < g_sched_thread_cnt ; i++){workers_epoch[i]=1;}
+#endif
 	seq_epoch = 0;
 	rsp_cnt = g_total_node_cnt - 1;
 	aria_phase = ARIA_INIT;
@@ -137,12 +142,21 @@ void SimManager::advance_seq_epoch() {
 	last_seq_epoch_time += g_seq_batch_time_limit;
 }
 
+#if CC_ALG != CALVIN_W
 uint64_t SimManager::get_worker_epoch() { return worker_epoch; }
 
 void SimManager::next_worker_epoch() {
 	last_worker_epoch_time = get_sys_clock();
 	ATOM_ADD(worker_epoch,1);
 }
+#else
+uint64_t SimManager::get_worker_epoch(uint32_t locker_id) { return workers_epoch[locker_id]; }
+
+void SimManager::next_worker_epoch(uint32_t locker_id) {
+	last_worker_epoch_time = get_sys_clock();
+	ATOM_ADD(workers_epoch[locker_id],1);
+}	
+#endif
 
 double SimManager::seconds_from_start(uint64_t time) {
 	return (double)(time - run_starttime) / BILLION;

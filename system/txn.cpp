@@ -151,7 +151,7 @@ void TxnStats::commit_stats(uint64_t thd_id, uint64_t txn_id, uint64_t batch_id,
 	total_work_queue_cnt += work_queue_cnt;
 	assert(total_process_time >= process_time);
 
-#if CC_ALG == CALVIN
+#if CC_ALG == CALVIN || CC_ALG == CALVIN_W
 
 	INC_STATS(thd_id,lat_s_loc_work_queue_time,work_queue_time);
 	INC_STATS(thd_id,lat_s_loc_msg_queue_time,msg_queue_time);
@@ -333,6 +333,17 @@ void Transaction::release(uint64_t thd_id) {
 }
 
 void TxnManager::init(uint64_t thd_id, Workload * h_wl) {
+#if CC_ALG == CALVIN_W
+	lockers_has_watched = (bool*)malloc(sizeof(bool)*g_sched_thread_cnt);
+	for(UInt32 i = 0 ; i < g_sched_thread_cnt ; i++)
+	{
+		lockers_has_watched[i] = false;
+	}
+	worker_has_dealed = false;
+	acquired_lock_num = 0;
+	sum_lock_num = 0;
+	has_ready = false;
+#endif
 	uint64_t prof_starttime = get_sys_clock();
 	if(!txn)  {
 	DEBUG_M("Transaction alloc\n");
@@ -365,7 +376,7 @@ void TxnManager::init(uint64_t thd_id, Workload * h_wl) {
 	_signal_abort = false;
 	_timestamp = glob_manager.get_ts(get_thd_id());
 #endif
-#if CC_ALG == CALVIN
+#if CC_ALG == CALVIN || CC_ALG == CALVIN_W
 	phase = CALVIN_RW_ANALYSIS;
 	locking_done = false;
 	calvin_locked_rows.init(MAX_ROW_PER_TXN);
@@ -430,6 +441,16 @@ void TxnManager::reset() {
 #else
 	lock_ready = false;
 #endif
+#if CC_ALG == CALVIN_W
+	for(UInt32 i = 0 ; i < g_sched_thread_cnt ; i++)
+	{
+		lockers_has_watched[i] = false;
+	}
+	worker_has_dealed = false;
+	has_ready = false;
+	acquired_lock_num = 0;
+	sum_lock_num = 0;
+#endif
 	lock_ready_cnt = 0;
 	locking_done = true;
 #if CC_ALG == DLI_MVCC || CC_ALG == DLI_MVCC_OCC
@@ -455,7 +476,7 @@ void TxnManager::reset() {
 	uncommitted_reads->clear();
 #endif
 
-#if CC_ALG == CALVIN || CC_ALG == HDCC
+#if CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == CALVIN_W
 	phase = CALVIN_RW_ANALYSIS;
 	locking_done = false;
 	calvin_locked_rows.clear();
@@ -519,7 +540,7 @@ void TxnManager::release() {
 	delete uncommitted_reads;
 #endif
 
-#if CC_ALG == CALVIN
+#if CC_ALG == CALVIN || CC_ALG == CALVIN_W
 	calvin_locked_rows.release();
 #endif
 #if CC_ALG == SILO
@@ -589,7 +610,7 @@ RC TxnManager::commit() {
 	inout_table.set_state(get_thd_id(), get_txn_id(), SSI_COMMITTED);
 #endif
 	commit_stats();
-#if LOGGING && CC_ALG != CALVIN
+#if LOGGING && CC_ALG != CALVIN && CC_ALG != CALVIN_W
 #if CC_ALG == HDCC
 	if (algo != CALVIN) {
 		LogRecord * record = logger.createRecord(get_txn_id(),L_COMMIT,0,0,max_calvin_tid);
@@ -646,7 +667,7 @@ RC TxnManager::abort() {
 	if (IS_LOCAL(get_txn_id()) && warmup_done) {
 		INC_STATS_ARR(get_thd_id(),start_abort_commit_latency, timespan);
 	}
-#if LOGGING && CC_ALG != CALVIN
+#if LOGGING && CC_ALG != CALVIN && CC_ALG != CALVIN_W
 #if CC_ALG == HDCC
 	if (algo != CALVIN) {
 #endif
@@ -740,7 +761,7 @@ RC TxnManager::start_commit() {
 	RC rc = RCOK;
 	DEBUG("%ld start_commit RO?%d\n",get_txn_id(),query->readonly());
 	if(is_multi_part()) {
-#if LOGGING && CC_ALG != CALVIN
+#if LOGGING && CC_ALG != CALVIN && CC_ALG != CALVIN_W
 #if CC_ALG == HDCC
 	if (algo != CALVIN) {
 #endif
@@ -806,7 +827,7 @@ RC TxnManager::start_commit() {
 		if(rc == RCOK) {
 #if SINGLE_WRITE_NODE
 			log_records.push_back(logger.createRecord(get_txn_id(),L_COMMIT,0,0,0,0));
-			for (uint64_t j = 0; j < g_storage_log_node_cnt; j++) {
+			for (uint64_t j = 0; j < g_storage_log_node_cnt; j++) { //这个for循环是向每个storage发消息
 				Message * msg = Message::create_message(log_records, LOG_MSG);
 				msg_queue.enqueue(get_thd_id(), msg, g_node_cnt + g_client_node_cnt + j);
 			}
@@ -872,7 +893,7 @@ void TxnManager::send_finish_messages() {
 int TxnManager::received_response(RC rc) {
 	assert(txn->rc == RCOK || txn->rc == Abort);
 	if (txn->rc == RCOK) txn->rc = rc;
-#if CC_ALG == CALVIN
+#if CC_ALG == CALVIN || CC_ALG == CALVIN_W
 	++rsp_cnt;
 #elif CC_ALG == HDCC || CC_ALG == SNAPPER
 	if (algo == CALVIN) {
@@ -972,7 +993,7 @@ void TxnManager::commit_stats() {
 		INC_STATS(get_thd_id(),cflt_cnt_txn,1);
 	}*/
 	txn_stats.commit_stats(get_thd_id(),get_txn_id(),get_batch_id(),timespan_long, timespan_short);
-	#if CC_ALG == CALVIN
+	#if CC_ALG == CALVIN || CC_ALG == CALVIN_W
 	return;
 	#endif
 
@@ -1079,7 +1100,7 @@ void TxnManager::cleanup_row(RC rc, uint64_t rid) {
 	uint64_t version = 0;
 	// Handle calvin elsewhere
 
-#if CC_ALG != CALVIN
+#if CC_ALG != CALVIN && CC_ALG != CALVIN_W
 #if ISOLATION_LEVEL != READ_UNCOMMITTED
 	row_t * orig_r = txn->accesses[rid]->orig_row;
 #if CC_ALG == HDCC && DETERMINISTIC_ABORT_MODE
@@ -1216,7 +1237,7 @@ void TxnManager::cleanup(RC rc) {
 		CC_ALG == DLI_MVCC_BASE
 	dli_man.finish_trans(rc, this);
 #endif
-#if CC_ALG == CALVIN
+#if CC_ALG == CALVIN || CC_ALG == CALVIN_W
 	// cleanup locked rows
 	for (uint64_t i = 0; i < calvin_locked_rows.size(); i++) {
 		row_t * row = calvin_locked_rows[i];
@@ -1419,7 +1440,7 @@ RC TxnManager::get_row(row_t * row, access_t type, row_t *& row_rtn) {
 
 #endif
 
-#if LOGGING && CC_ALG != CALVIN
+#if LOGGING && CC_ALG != CALVIN && CC_ALG != CALVIN_W
 	if (type == WR) {
 #if CC_ALG == HDCC
 		if (algo != CALVIN) {
@@ -1458,7 +1479,7 @@ RC TxnManager::get_row(row_t * row, access_t type, row_t *& row_rtn) {
 	INC_STATS(get_thd_id(), txn_manager_time, timespan);
 	row_rtn  = access->data;
 
-	if (CC_ALG == HSTORE || CC_ALG == HSTORE_SPEC || CC_ALG == CALVIN) assert(rc == RCOK);
+	if (CC_ALG == HSTORE || CC_ALG == HSTORE_SPEC || CC_ALG == CALVIN || CC_ALG == CALVIN_W) assert(rc == RCOK);
 	assert(rc == RCOK);
 	return rc;
 }
@@ -1674,7 +1695,7 @@ RC TxnManager::validate() {
 }
 
 RC TxnManager::send_remote_reads() {
-	assert(CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == SNAPPER);
+	assert(CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == SNAPPER || CC_ALG == CALVIN_W);
 #if !YCSB_ABORT_MODE && WORKLOAD == YCSB
 	return RCOK;
 #endif

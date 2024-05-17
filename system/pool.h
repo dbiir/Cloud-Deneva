@@ -41,7 +41,7 @@ public:
   void free_all();
 
 private:
-#if CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == SNAPPER
+#if CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == SNAPPER || CC_ALG == CALVIN_W
   boost::lockfree::queue<TxnManager*> * pool;
 #else
   boost::lockfree::queue<TxnManager*> ** pool;
@@ -59,7 +59,7 @@ public:
   void free_all();
 
 private:
-#if CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == SNAPPER
+#if CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == SNAPPER || CC_ALG == CALVIN_W
   boost::lockfree::queue<Transaction*> * pool;
 #else
   boost::lockfree::queue<Transaction*> ** pool;
@@ -80,7 +80,7 @@ public:
   void free_all();
 
 private:
-#if CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == SNAPPER
+#if CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == SNAPPER || CC_ALG == CALVIN_W
   boost::lockfree::queue<BaseQuery* > * pool;
 #else
   boost::lockfree::queue<BaseQuery* > ** pool;

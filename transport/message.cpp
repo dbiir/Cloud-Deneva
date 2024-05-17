@@ -163,6 +163,11 @@ Message * Message::create_message(RemReqType rtype) {
     case LOG_FLUSHED:
       msg = new LogFlushedMessage;
       break;
+    case CLOUD_LOG_TXN:
+      msg = new LogCloudTxnMessage;
+      break;
+    case CLOUD_LOG_TXN_ACK:
+      msg = new LogFlushedMessage;
     case CALVIN_ACK:
     case ARIA_ACK:
     case RACK_PREP:
@@ -236,7 +241,7 @@ uint64_t Message::mget_size() {
   uint64_t size = 0;
   size += sizeof(RemReqType);
   size += sizeof(uint64_t);
-#if CC_ALG == CALVIN
+#if CC_ALG == CALVIN || CC_ALG == CALVIN_W
   size += sizeof(uint64_t);
 #endif
 #if CC_ALG == HDCC
@@ -259,7 +264,7 @@ uint64_t Message::mget_size() {
 void Message::mcopy_from_txn(TxnManager * txn) {
   //rtype = query->rtype;
   txn_id = txn->get_txn_id();
-#if CC_ALG == CALVIN || CC_ALG == ARIA
+#if CC_ALG == CALVIN || CC_ALG == ARIA || CC_ALG == CALVIN_W
   batch_id = txn->get_batch_id();
 #elif CC_ALG == HDCC
   batch_id = txn->get_batch_id();
@@ -282,7 +287,7 @@ void Message::mcopy_from_buf(char * buf) {
   uint64_t ptr = 0;
   COPY_VAL(rtype,buf,ptr);
   COPY_VAL(txn_id,buf,ptr);
-#if CC_ALG == CALVIN
+#if CC_ALG == CALVIN || CC_ALG == CALVIN_W
   COPY_VAL(batch_id,buf,ptr);
 #elif CC_ALG == HDCC
   COPY_VAL(batch_id,buf,ptr);
@@ -301,8 +306,8 @@ void Message::mcopy_from_buf(char * buf) {
   COPY_VAL(lat_process_time,buf,ptr);
   COPY_VAL(lat_network_time,buf,ptr);
   COPY_VAL(lat_other_time,buf,ptr);
-  if ((CC_ALG == CALVIN && rtype == CALVIN_ACK && txn_id % g_node_cnt == g_node_id) ||
-      (CC_ALG != CALVIN && IS_LOCAL(txn_id))) {
+  if (((CC_ALG == CALVIN || CC_ALG == CALVIN_W) && rtype == CALVIN_ACK && txn_id % g_node_cnt == g_node_id) ||
+      ((CC_ALG != CALVIN && CC_ALG != CALVIN_W) && IS_LOCAL(txn_id))) {
     lat_network_time = (get_sys_clock() - lat_network_time) - lat_other_time;
   } else {
     lat_other_time = get_sys_clock();
@@ -314,7 +319,7 @@ void Message::mcopy_to_buf(char * buf) {
   uint64_t ptr = 0;
   COPY_BUF(buf,rtype,ptr);
   COPY_BUF(buf,txn_id,ptr);
-#if CC_ALG == CALVIN
+#if CC_ALG == CALVIN || CC_ALG == CALVIN_W
   COPY_BUF(buf,batch_id,ptr);
 #elif CC_ALG == HDCC
   COPY_BUF(buf,batch_id,ptr);
@@ -331,8 +336,8 @@ void Message::mcopy_to_buf(char * buf) {
   COPY_BUF(buf,lat_cc_block_time,ptr);
   COPY_BUF(buf,lat_cc_time,ptr);
   COPY_BUF(buf,lat_process_time,ptr);
-  if ((CC_ALG == CALVIN && (rtype == CL_QRY||rtype == CL_QRY_O) && txn_id % g_node_cnt == g_node_id) ||
-      (CC_ALG != CALVIN && IS_LOCAL(txn_id))) {
+  if (((CC_ALG == CALVIN || CC_ALG == CALVIN_W) && (rtype == CL_QRY||rtype == CL_QRY_O) && txn_id % g_node_cnt == g_node_id) ||
+      ((CC_ALG != CALVIN && CC_ALG != CALVIN_W) && IS_LOCAL(txn_id))) {
     lat_network_time = get_sys_clock();
   } else {
     lat_other_time = get_sys_clock() - lat_other_time;
@@ -552,6 +557,63 @@ void QueryMessage::copy_to_buf(char * buf) {
   COPY_BUF(buf,aria_phase,ptr);
 #endif
   COPY_BUF(buf, isDeterministicAbort, ptr);
+}
+
+void LogCloudTxnMessage::copy_from_msg(Message * msg)
+{
+#if WORKLOAD == YCSB
+  YCSBClientQueryMessage* ycsb_msg = ((YCSBClientQueryMessage*)msg);
+  requests.init(g_req_per_query);
+  uint64_t req_count = ycsb_msg->requests.get_count();
+  array_size1 = 0;
+  array_size2 = req_count;
+  for(uint64_t i = 0 ; i < req_count ; i++)
+  {
+    requests.add(ycsb_msg->requests.get(i));
+  }
+#elif WORKLOAD == TPCC
+  TPCCClientQueryMessage* tpcc_msg = ((TPCCClientQueryMessage*)msg);
+  txn_type = tpcc_msg->txn_type;
+  w_id = tpcc_msg->w_id;
+  d_id = tpcc_msg->d_id;
+  array_size1 = 0;
+  array_size2 = 0;
+  switch (txn_type)
+  {
+  case TPCC_PAYMENT:
+    c_id = tpcc_msg->c_id;
+    d_w_id = tpcc_msg->d_w_id;
+    c_w_id = tpcc_msg->c_w_id;
+    c_d_id = tpcc_msg->c_d_id;
+    memcpy(c_last, tpcc_msg->c_last , LASTNAME_LEN);
+    h_amount = tpcc_msg->h_amount;
+    by_last_name = tpcc_msg->by_last_name;
+    break;
+  case TPCC_NEW_ORDER:
+    c_id = tpcc_msg->c_id;
+    items.copy(tpcc_msg->items);
+    array_size1 = tpcc_msg->items.get_count();
+    rbk = tpcc_msg->rbk;
+    remote = tpcc_msg->remote;
+    ol_cnt = tpcc_msg->ol_cnt;
+    o_entry_d = tpcc_msg->o_entry_d;
+    break;
+  case TPCC_ORDER_STATUS:
+    o_id = tpcc_msg->o_id;
+    break;
+  case TPCC_DELIVERY:
+    o_id = tpcc_msg->o_id;
+    o_carrier_id = tpcc_msg->o_carrier_id;
+    ol_delivery_d = tpcc_msg->ol_delivery_d;
+    break;
+  case TPCC_STOCK_LEVEL:
+    o_id = tpcc_msg->o_id;
+    threshold = tpcc_msg->threshold;
+    break;
+  default:
+    assert(false);
+  }
+#endif
 }
 
 /************************/
@@ -855,7 +917,7 @@ uint64_t PPSClientQueryMessage::get_size() {
   size += sizeof(uint64_t)*3;
   size += sizeof(size_t);
   size += sizeof(uint64_t) * part_keys.size();
-#if CC_ALG == CALVIN
+#if CC_ALG == CALVIN || CC_ALG == CALVIN_W
   size += sizeof(bool);
 #endif
   return size;
@@ -879,7 +941,7 @@ void PPSClientQueryMessage::copy_from_query(BaseQuery * query) {
 void PPSClientQueryMessage::copy_from_txn(TxnManager * txn) {
   ClientQueryMessage::mcopy_from_txn(txn);
   copy_from_query(txn->query);
-#if CC_ALG == CALVIN
+#if CC_ALG == CALVIN || CC_ALG == CALVIN_W
   recon = txn->isRecon();
 #endif
 }
@@ -911,7 +973,7 @@ void PPSClientQueryMessage::copy_to_txn(TxnManager * txn) {
   pps_query->supplier_key = supplier_key;
   pps_query->part_keys.append(part_keys);
 
-#if CC_ALG == CALVIN
+#if CC_ALG == CALVIN || CC_ALG == CALVIN_W
   txn->recon = recon;
 #endif
 #if DEBUG_DISTR
@@ -940,7 +1002,7 @@ void PPSClientQueryMessage::copy_from_buf(char * buf) {
     part_keys.add(item);
   }
 
-#if CC_ALG == CALVIN
+#if CC_ALG == CALVIN || CC_ALG == CALVIN_W
   COPY_VAL(recon,buf,ptr);
 #endif
 
@@ -969,7 +1031,7 @@ void PPSClientQueryMessage::copy_to_buf(char * buf) {
     COPY_BUF(buf,item,ptr);
   }
 
-#if CC_ALG == CALVIN
+#if CC_ALG == CALVIN || CC_ALG == CALVIN_W
   COPY_BUF(buf,recon,ptr);
 #endif
 
@@ -1341,7 +1403,7 @@ uint64_t AckMessage::get_size() {
   size += sizeof(bool);
   size += sizeof(bool);
 #endif
-#if WORKLOAD == PPS && CC_ALG == CALVIN
+#if WORKLOAD == PPS && (CC_ALG == CALVIN || CC_ALG == CALVIN_W)
   size += sizeof(size_t);
   size += sizeof(uint64_t) * part_keys.size();
 #endif
@@ -1393,7 +1455,7 @@ void AckMessage::copy_from_txn(TxnManager * txn) {
   dependBy = txn->dependBy;
 #endif
 
-#if WORKLOAD == PPS && CC_ALG == CALVIN
+#if WORKLOAD == PPS && (CC_ALG == CALVIN || CC_ALG == CALVIN_W)
   PPSQuery* pps_query = (PPSQuery*)(txn->query);
   part_keys.copy(pps_query->part_keys);
 #endif
@@ -1407,7 +1469,7 @@ void AckMessage::copy_to_txn(TxnManager * txn) {
   txn->dependOn = dependOn;
   txn->dependBy = dependBy;
 #endif
-#if WORKLOAD == PPS && CC_ALG == CALVIN
+#if WORKLOAD == PPS && (CC_ALG == CALVIN || CC_ALG == CALVIN_W)
 
   PPSQuery* pps_query = (PPSQuery*)(txn->query);
   pps_query->part_keys.append(part_keys);
@@ -1447,7 +1509,7 @@ void AckMessage::copy_from_buf(char * buf) {
     dependBy.insert(item);
   }
 #endif
-#if WORKLOAD == PPS && CC_ALG == CALVIN
+#if WORKLOAD == PPS && (CC_ALG == CALVIN || CC_ALG == CALVIN_W)
 
   size_t size;
   COPY_VAL(size,buf,ptr);
@@ -1493,7 +1555,7 @@ void AckMessage::copy_to_buf(char * buf) {
     COPY_BUF(buf,item,ptr);
   }
 #endif
-#if WORKLOAD == PPS && CC_ALG == CALVIN
+#if WORKLOAD == PPS && (CC_ALG == CALVIN || CC_ALG == CALVIN_W)
 
   size_t size = part_keys.size();
   COPY_BUF(buf,size,ptr);
@@ -2306,3 +2368,132 @@ uint64_t DAQueryMessage::get_size() {
   return size;
 }
 void DAQueryMessage::release() { QueryMessage::release(); }
+
+
+void LogCloudTxnMessage::copy_from_buf(char * buf) {
+  Message::mcopy_from_buf(buf);
+  uint64_t ptr = Message::mget_size();
+  COPY_VAL(array_size1,buf,ptr);
+  COPY_VAL(array_size2,buf,ptr);
+  items.init(g_max_items_per_txn);
+  requests.init(g_req_per_query);
+  for(uint64_t i = 0 ; i < g_max_items_per_txn ; i++)
+  {
+    if(i < array_size1)
+    {
+      Item_no * item = new Item_no();
+      COPY_VAL(*item,buf,ptr);
+      items.add(item);
+    }
+    else
+    {
+      Item_no * item = new Item_no();
+      COPY_VAL(*item,buf,ptr);
+      delete item;
+    }
+  }
+  for(uint64_t i = 0 ; i < g_req_per_query ; i++)
+  {
+    if(i < array_size2)
+    {
+      ycsb_request * req = new ycsb_request();
+      COPY_VAL(*req,buf,ptr);
+      requests.add(req);
+    }
+    else
+    {
+      ycsb_request * req = new ycsb_request();
+      COPY_VAL(*req,buf,ptr);
+      delete req;
+    }
+  }
+  for(uint64_t i = 0 ; i < LASTNAME_LEN ; i++)
+  {
+    COPY_VAL(*(c_last+i),buf,ptr);
+  }
+  COPY_VAL(txn_type,buf,ptr);
+  COPY_VAL(w_id,buf,ptr);
+  COPY_VAL(d_id,buf,ptr);
+  COPY_VAL(c_id,buf,ptr);
+  COPY_VAL(d_w_id,buf,ptr);
+  COPY_VAL(c_w_id,buf,ptr);
+  COPY_VAL(c_d_id,buf,ptr);
+  COPY_VAL(h_amount,buf,ptr);
+  COPY_VAL(by_last_name,buf,ptr);
+  COPY_VAL(rbk,buf,ptr);
+  COPY_VAL(remote,buf,ptr);
+  COPY_VAL(ol_cnt,buf,ptr);
+  COPY_VAL(o_entry_d,buf,ptr);
+  COPY_VAL(o_id,buf,ptr);
+  COPY_VAL(o_carrier_id,buf,ptr);
+  COPY_VAL(ol_delivery_d,buf,ptr);
+  COPY_VAL(threshold,buf,ptr);
+  assert(ptr == get_size());
+}
+void LogCloudTxnMessage::copy_to_buf(char * buf) {
+  Message::mcopy_to_buf(buf);
+  uint64_t ptr = Message::mget_size();
+  // COPY_BUF(buf,client_startts,ptr);
+  COPY_BUF(buf,array_size1,ptr);
+  COPY_BUF(buf,array_size2,ptr);
+  for(uint64_t i = 0 ; i < g_max_items_per_txn ; i++)
+  {
+    if(i < array_size1)
+    {
+      Item_no * item = items.get(i);
+      COPY_BUF(buf,*item,ptr);
+    }
+    else
+    {
+      Item_no * item = new Item_no;
+      COPY_BUF(buf,*item,ptr);
+      delete item;
+    }
+  }
+  for(uint64_t i = 0 ; i < g_req_per_query ; i++)
+  {
+    if(i < array_size2)
+    {
+      ycsb_request * req = requests.get(i);
+      COPY_BUF(buf,*req,ptr);
+    }
+    else
+    {
+      ycsb_request * req = new ycsb_request();
+      COPY_BUF(buf,*req,ptr);
+      delete req;
+    }
+  }
+  for(uint64_t i = 0 ; i < LASTNAME_LEN ; i++)
+  {
+    COPY_BUF(buf,*(c_last+i),ptr);
+  }
+  COPY_BUF(buf,txn_type,ptr);
+  COPY_BUF(buf,w_id,ptr);
+  COPY_BUF(buf,d_id,ptr);
+  COPY_BUF(buf,c_id,ptr);
+  COPY_BUF(buf,d_w_id,ptr);
+  COPY_BUF(buf,c_w_id,ptr);
+  COPY_BUF(buf,c_d_id,ptr);
+  COPY_BUF(buf,h_amount,ptr);
+  COPY_BUF(buf,by_last_name,ptr);
+  COPY_BUF(buf,rbk,ptr);
+  COPY_BUF(buf,remote,ptr);
+  COPY_BUF(buf,ol_cnt,ptr);
+  COPY_BUF(buf,o_entry_d,ptr);
+  COPY_BUF(buf,o_id,ptr);
+  COPY_BUF(buf,o_carrier_id,ptr);
+  COPY_BUF(buf,ol_delivery_d,ptr);
+  COPY_BUF(buf,threshold,ptr);
+  assert(ptr == get_size());
+}
+uint64_t LogCloudTxnMessage::get_size() {
+  uint64_t size_else = Message::mget_size();
+  size_else += (sizeof(uint64_t) * 2);
+  size_else += (g_max_items_per_txn * sizeof(Item_no));
+  size_else += (g_req_per_query * sizeof(ycsb_request));
+  size_else += (LASTNAME_LEN * sizeof(char));
+  size_else += (14 * sizeof(uint64_t));
+  size_else += (3 * sizeof(bool));
+  return size_else;
+}

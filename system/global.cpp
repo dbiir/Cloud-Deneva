@@ -178,6 +178,9 @@ UInt32 g_send_thread_cnt = SEND_THREAD_CNT;
 #if CC_ALG == CALVIN
 // sequencer + scheduler thread
 UInt32 g_total_thread_cnt = g_thread_cnt + g_rem_thread_cnt + g_send_thread_cnt + g_abort_thread_cnt + g_stats_per_interval_thread_cnt + g_logger_thread_cnt + 2;
+#elif CC_ALG == CALVIN_W
+UInt32 g_total_thread_cnt = g_thread_cnt + g_rem_thread_cnt + g_send_thread_cnt + g_abort_thread_cnt +\
+                            g_stats_per_interval_thread_cnt + g_logger_thread_cnt + 1 + g_sched_thread_cnt;
 #elif CC_ALG == SNAPPER
 // sequencer + scheduler thread + snapper_check_thread
 UInt32 g_total_thread_cnt = g_thread_cnt + g_rem_thread_cnt + g_send_thread_cnt + g_abort_thread_cnt + g_stats_per_interval_thread_cnt + g_logger_thread_cnt + 3;
@@ -237,6 +240,9 @@ UInt64 g_his_recycle_len = HIS_RECYCLE_LEN;
 
 // CALVIN
 UInt32 g_seq_thread_cnt = SEQ_THREAD_CNT;
+
+// CALVIN_W
+UInt32 g_sched_thread_cnt = CAL_LOCK_CNT;
 
 // HDCC
 UInt32 g_calvin_thread_cnt = CALVIN_THREAD_CNT;

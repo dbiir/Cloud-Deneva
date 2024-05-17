@@ -299,7 +299,8 @@ extern ofstream commit_file;
 extern ofstream abort_file;
 // CALVIN
 extern UInt32 g_seq_thread_cnt;
-
+// CALVIN_W
+extern UInt32 g_sched_thread_cnt;  // number of calvin locker
 //HDCC
 extern UInt32 g_calvin_thread_cnt; // number of calvin threads in the thread pool
 extern UInt64 g_data_shard_size; // number of tuples in each data shard
@@ -325,7 +326,8 @@ extern uint32_t g_max_num_waits;
 extern UInt32 g_repl_type;
 extern UInt32 g_repl_cnt;
 
-enum RC { RCOK=0, Commit, Abort, WAIT, WAIT_REM, ERROR, FINISH, NONE};
+enum RC { RCOK=0, Commit, Abort, WAIT, WAIT_REM, ERROR, FINISH, NONE}; 
+//RCOK代表可以做下一步，COMMIT代表事务可提交，WAIT_REM代表等远程读
 enum RemReqType {
   INIT_DONE = 0,
     RLK,
@@ -352,6 +354,10 @@ enum RemReqType {
     LOG_MSG,
     LOG_MSG_RSP,
     LOG_FLUSHED,
+#if CC_ALG == CALVIN || CC_ALG == CALVIN_W
+    CLOUD_LOG_TXN,      // used for cloud db, seq send to storage
+    CLOUD_LOG_TXN_ACK,  // used for cloud db, storage send to seq
+#endif
     CALVIN_ACK,
     CALVIN_ABORT,
     ARIA_ACK,
@@ -419,8 +425,8 @@ enum TsType {R_REQ = 0, W_REQ, P_REQ, XP_REQ};
   (id >= g_node_cnt + g_client_node_cnt && \
    id < g_node_cnt + g_client_node_cnt + g_repl_cnt * g_node_cnt)
 #define ISCLIENTN(id) (id >= g_node_cnt && id < g_node_cnt + g_client_node_cnt)
-#define IS_LOCAL(tid) (tid % g_node_cnt == g_node_id || CC_ALG == CALVIN)
-#define IS_REMOTE(tid) (tid % g_node_cnt != g_node_id || CC_ALG == CALVIN)
+#define IS_LOCAL(tid) (tid % g_node_cnt == g_node_id || CC_ALG == CALVIN || CC_ALG == CALVIN_W)
+#define IS_REMOTE(tid) (tid % g_node_cnt != g_node_id || CC_ALG == CALVIN || CC_ALG == CALVIN_W)
 #define IS_LOCAL_KEY(key) (key % g_node_cnt == g_node_id)
 
 /*

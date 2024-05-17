@@ -130,7 +130,7 @@ void YCSBQuery::reset(int algo) {
 #else
 void YCSBQuery::reset() {
 	BaseQuery::clear();
-#if CC_ALG != CALVIN
+#if CC_ALG != CALVIN && CC_ALG != CALVIN_W
 	release_requests();
 #endif
 	requests.clear();
@@ -140,7 +140,7 @@ void YCSBQuery::reset() {
 void YCSBQuery::release() {
 	BaseQuery::release();
 	DEBUG_M("YCSBQuery::release() free\n");
-#if CC_ALG != CALVIN
+#if CC_ALG != CALVIN && CC_ALG != CALVIN_W
 	release_requests();
 #endif
 	requests.release();

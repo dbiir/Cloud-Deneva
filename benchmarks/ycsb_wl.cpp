@@ -30,7 +30,7 @@
 #include "row_mvcc.h"
 #include "mem_alloc.h"
 #include "query.h"
-
+// WhiteBear: 生成负载数据，应该不需要动（可能是数据分区需要改）
 int YCSBWorkload::next_tid;
 
 RC YCSBWorkload::init() {

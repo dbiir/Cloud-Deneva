@@ -33,9 +33,118 @@
 #include "txn.h"
 #include "ycsb.h"
 
+void init_log_record_by_msg(LogRecord * rec,LogCloudTxnMessage * cmsg)
+{
+	AriesLogRecord & rcd = rec->rcd;
+	rcd.iud = L_CLOUD_TXN;
+	rcd.txn_id = cmsg->txn_id;
+	rcd.image_size = 1;
+	memcpy((rcd.before_and_after_image)+rcd.image_size,&(cmsg->txn_id),sizeof(cmsg->txn_id));
+	rcd.image_size += sizeof(cmsg->txn_id);
+	memcpy((rcd.before_and_after_image)+rcd.image_size,&(cmsg->array_size2),sizeof(uint64_t));
+	rcd.image_size += sizeof(uint64_t);
+	if(WORKLOAD == YCSB)
+	{
+		for(uint64_t i = 0 ; i < cmsg->requests.get_count();i++)
+		{
+			ycsb_request*req = cmsg->requests.get(i);
+			memcpy((rcd.before_and_after_image)+rcd.image_size,req,sizeof(ycsb_request));
+			rcd.image_size += sizeof(ycsb_request);
+		}
+	}
+	else if(WORKLOAD == TPCC)
+	{
+		assert(cmsg);
+		memcpy((rcd.before_and_after_image)+rcd.image_size,&(cmsg->array_size1),sizeof(uint64_t));
+		rcd.image_size += sizeof(uint64_t);
+		memcpy((rcd.before_and_after_image)+rcd.image_size,&(cmsg->txn_type),sizeof(uint64_t));
+		rcd.image_size += sizeof(uint64_t);
+		memcpy((rcd.before_and_after_image)+rcd.image_size,&(cmsg->w_id),sizeof(uint64_t));
+		rcd.image_size += sizeof(uint64_t);
+		memcpy((rcd.before_and_after_image)+rcd.image_size,&(cmsg->d_id),sizeof(uint64_t));
+		rcd.image_size += sizeof(uint64_t);
+		switch (cmsg->txn_type)
+		{
+		case TPCC_PAYMENT:
+			memcpy((rcd.before_and_after_image)+rcd.image_size,&(cmsg->c_id),sizeof(uint64_t));
+			rcd.image_size += sizeof(uint64_t);
+			memcpy((rcd.before_and_after_image)+rcd.image_size,&(cmsg->d_w_id),sizeof(uint64_t));
+			rcd.image_size += sizeof(uint64_t);
+			memcpy((rcd.before_and_after_image)+rcd.image_size,&(cmsg->c_w_id),sizeof(uint64_t));
+			rcd.image_size += sizeof(uint64_t);
+			memcpy((rcd.before_and_after_image)+rcd.image_size,&(cmsg->c_d_id),sizeof(uint64_t));
+			rcd.image_size += sizeof(uint64_t);
+			memcpy((rcd.before_and_after_image)+rcd.image_size,&(cmsg->c_last),LASTNAME_LEN);
+			rcd.image_size += LASTNAME_LEN;
+			memcpy((rcd.before_and_after_image)+rcd.image_size,&(cmsg->h_amount),sizeof(uint64_t));
+			rcd.image_size += sizeof(uint64_t);
+			memcpy((rcd.before_and_after_image)+rcd.image_size,&(cmsg->by_last_name),sizeof(uint64_t));
+			rcd.image_size += sizeof(uint64_t);
+			break;
+		case TPCC_NEW_ORDER:
+			memcpy((rcd.before_and_after_image)+rcd.image_size,&(cmsg->c_id),sizeof(uint64_t));
+			rcd.image_size += sizeof(uint64_t);
+			for(uint64_t i = 0 ; i < cmsg->items.get_count();i++)
+			{
+				Item_no*item = cmsg->items.get(i);
+				memcpy((rcd.before_and_after_image)+rcd.image_size,item,sizeof(Item_no));
+				rcd.image_size += sizeof(Item_no);
+			}
+			memcpy((rcd.before_and_after_image)+rcd.image_size,&(cmsg->rbk),sizeof(bool));
+			rcd.image_size += sizeof(bool);
+			memcpy((rcd.before_and_after_image)+rcd.image_size,&(cmsg->remote),sizeof(bool));
+			rcd.image_size += sizeof(bool);
+			memcpy((rcd.before_and_after_image)+rcd.image_size,&(cmsg->ol_cnt),sizeof(uint64_t));
+			rcd.image_size += sizeof(uint64_t);
+			memcpy((rcd.before_and_after_image)+rcd.image_size,&(cmsg->o_entry_d),sizeof(uint64_t));
+			rcd.image_size += sizeof(uint64_t);
+			break;
+		case TPCC_ORDER_STATUS:
+			memcpy((rcd.before_and_after_image)+rcd.image_size,&(cmsg->o_id),sizeof(uint64_t));
+			rcd.image_size += sizeof(uint64_t);
+			break;
+		case TPCC_DELIVERY:
+			memcpy((rcd.before_and_after_image)+rcd.image_size,&(cmsg->o_id),sizeof(uint64_t));
+			rcd.image_size += sizeof(uint64_t);
+			memcpy((rcd.before_and_after_image)+rcd.image_size,&(cmsg->o_carrier_id),sizeof(uint64_t));
+			rcd.image_size += sizeof(uint64_t);
+			memcpy((rcd.before_and_after_image)+rcd.image_size,&(cmsg->ol_delivery_d),sizeof(uint64_t));
+			rcd.image_size += sizeof(uint64_t);
+			break;
+		case TPCC_STOCK_LEVEL:
+			memcpy((rcd.before_and_after_image)+rcd.image_size,&(cmsg->o_id),sizeof(uint64_t));
+			rcd.image_size += sizeof(uint64_t);
+			memcpy((rcd.before_and_after_image)+rcd.image_size,&(cmsg->threshold),sizeof(uint64_t));
+			rcd.image_size += sizeof(uint64_t);
+			break;
+		default:
+			assert(false);
+			break;
+		}
+	}
+	else
+	{
+		assert(false);
+	}
+	
+}
+
 void InputThread::setup() {
 
 	std::vector<Message*> * msgs;
+	size_t cloud_log_record_size = 0;
+	if(WORKLOAD == YCSB)
+	{
+		// cloud_log_record_size = sizeof(ycsb_request) * g_req_per_query;
+		cloud_log_record_size = 240;
+	}
+	else if (WORKLOAD == TPCC)
+	{
+		// cloud_log_record_size = sizeof(uint64_t) * 14 + sizeof(bool) * 3 + sizeof(Item_no) *  g_max_items_per_txn + LASTNAME_LEN * sizeof(char);
+		cloud_log_record_size = 491;
+	}
+	assert(cloud_log_record_size != 0);
+	fflush(stdout);
 	while(!simulation->is_setup_done()) {
 		msgs = tport_man.recv_msg(get_thd_id());
 		if (msgs == NULL) continue;
@@ -48,9 +157,15 @@ void InputThread::setup() {
 			} else {
 				if (ISSERVER || ISREPLICA) {
 					//printf("Received Msg %d from node %ld\n",msg->rtype,msg->return_node_id);
-#if CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == SNAPPER
+#if CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == SNAPPER || CC_ALG == CALVIN_W
 					if(msg->rtype == CALVIN_ACK ||(msg->rtype == CL_QRY && ISCLIENTN(msg->get_return_id())) ||
 						(msg->rtype == CL_QRY_O && ISCLIENTN(msg->get_return_id()))) {
+						work_queue.sequencer_enqueue(get_thd_id(),msg);
+						msgs->erase(msgs->begin());
+						continue;
+					}
+					if(msg->rtype == CLOUD_LOG_TXN_ACK)
+					{
 						work_queue.sequencer_enqueue(get_thd_id(),msg);
 						msgs->erase(msgs->begin());
 						continue;
@@ -63,7 +178,7 @@ void InputThread::setup() {
 					}
 #endif
 					work_queue.enqueue(get_thd_id(),msg,false);
-				} else {
+				} else {					
 					if (msg->rtype == LOG_MSG) {
 						uint64_t record_cnt = ((LogMessage*)msg)->record_cnt;
 						LogRecord ** record = (LogRecord**)mem_allocator.alloc(sizeof(LogRecord*) * record_cnt);
@@ -71,6 +186,13 @@ void InputThread::setup() {
 							record[i] = ((LogMessage*)msg)->records[i];
 							logger.enqueueRecord(record[i]);
 						}
+						delete msg;
+					}else if(msg->rtype == CLOUD_LOG_TXN)
+					{
+						LogRecord * record = (LogRecord*)mem_allocator.alloc(sizeof(LogRecord) + cloud_log_record_size + 2 * sizeof(uint64_t));
+						LogCloudTxnMessage * cmsg = (LogCloudTxnMessage*)msg;
+						init_log_record_by_msg(record,cmsg);
+						logger.enqueueRecord(record);
 						delete msg;
 					} else {
 							assert(false);
@@ -252,7 +374,7 @@ RC InputThread::server_recv_loop() {
 				msgs->erase(msgs->begin());
 				continue;
 			}
-#if CC_ALG == CALVIN||CC_ALG==HDCC || CC_ALG == SNAPPER
+#if CC_ALG == CALVIN || CC_ALG==HDCC || CC_ALG == SNAPPER || CC_ALG == CALVIN_W
 			if(msg->rtype==CONF_STAT){
 				assert(CC_ALG==HDCC);
 				g_conflict_queue.push((ConflictStaticsMessage*)msg);
@@ -261,6 +383,12 @@ RC InputThread::server_recv_loop() {
 			}
 			if(msg->rtype == CALVIN_ACK ||(msg->rtype == CL_QRY && ISCLIENTN(msg->get_return_id())) ||
 			(msg->rtype == CL_QRY_O && ISCLIENTN(msg->get_return_id()))) {
+				work_queue.sequencer_enqueue(get_thd_id(),msg);
+				msgs->erase(msgs->begin());
+				continue;
+			}
+			if( msg->rtype == CLOUD_LOG_TXN_ACK )
+			{
 				work_queue.sequencer_enqueue(get_thd_id(),msg);
 				msgs->erase(msgs->begin());
 				continue;
@@ -289,6 +417,18 @@ RC InputThread::server_recv_loop() {
 
 RC InputThread::storage_recv_loop() {
 	std::vector<Message*> * msgs;
+	size_t cloud_log_record_size = 0;
+	if(WORKLOAD == YCSB)
+	{
+		// cloud_log_record_size = sizeof(ycsb_request) * g_req_per_query;
+		cloud_log_record_size = 240;
+	}
+	else if (WORKLOAD == TPCC)
+	{
+		// cloud_log_record_size = sizeof(uint64_t) * 14 + sizeof(bool) * 3 + sizeof(Item_no) *  g_max_items_per_txn + LASTNAME_LEN * sizeof(char);
+		cloud_log_record_size = 491;
+	}
+	assert(cloud_log_record_size != 0);
 	while (!simulation->is_done()) {
 		heartbeat();
 		msgs = tport_man.recv_msg(get_thd_id());
@@ -307,7 +447,14 @@ RC InputThread::storage_recv_loop() {
 					logger.enqueueRecord(record[i]);
 				}
 				delete msg;
-			} else {
+			}
+			else if(msg->rtype == CLOUD_LOG_TXN) {
+				LogRecord * record = (LogRecord*)mem_allocator.alloc(sizeof(LogRecord) + cloud_log_record_size + 2 * sizeof(uint64_t));
+				LogCloudTxnMessage * cmsg = (LogCloudTxnMessage*)msg;
+				init_log_record_by_msg(record,cmsg);
+				logger.enqueueRecord(record);
+				delete msg;
+			}else {
 					assert(false);
 			}
 			msgs->erase(msgs->begin());

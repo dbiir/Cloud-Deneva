@@ -39,6 +39,9 @@
 #include <vector>
 #include "row.h"
 #endif
+#if CC_ALG == CALVIN || CC_ALG == CALVIN_W
+#include <map> //used for sequencer thread temporary store txn msg
+#endif
 
 void CalvinLockThread::setup() {}
 
@@ -77,13 +80,27 @@ RC CalvinLockThread::run() {
 #endif
 		while (!txn_man->unset_ready()) {
 		}
+#if CC_ALG == CALVIN_W
+		if(txn_man->worker_has_dealed)
+		{
+			txn_table.release_transaction_manager(get_thd_id(), txn_man->get_txn_id(),
+                                        txn_man->get_batch_id());
+			continue;
+		}
+#endif
 		assert(ISSERVERN(msg->get_return_id()));
 		txn_man->txn_stats.starttime = get_sys_clock();
 
 		txn_man->txn_stats.lat_network_time_start = msg->lat_network_time;
 		txn_man->txn_stats.lat_other_time_start = msg->lat_other_time;
-
+#if CC_ALG == CALVIN_W
+		if(ATOM_CAS(txn_man->has_ready,false,true))
+		{
+			msg->copy_to_txn(txn_man);
+		}
+#else
 		msg->copy_to_txn(txn_man);
+#endif
 		txn_man->register_thread(this);
 		assert(ISSERVERN(txn_man->return_id));
 
@@ -92,14 +109,17 @@ RC CalvinLockThread::run() {
 
 		rc = RCOK;
 		// Acquire locks
-		if (!txn_man->isRecon()) {
+		if (!txn_man->isRecon()) {	
+				//判断条件没有实际意义
 				rc = txn_man->acquire_locks();
 		}
 
 		if(rc == RCOK) {
-				work_queue.enqueue(_thd_id,msg,false);
+				// WhiteBear: 要避免多线程加锁一个事务不进队列或者进多次队列
+				work_queue.enqueue(_thd_id,msg,false);	
 		}
-		txn_man->set_ready();
+		txn_man->set_ready();	
+		//原本的作用是避免多个线程操作同一个事务
 
 		INC_STATS(_thd_id,mtx[33],get_sys_clock() - prof_starttime);
 		prof_starttime = get_sys_clock();
@@ -218,6 +238,10 @@ RC CalvinSequencerThread::run() {
 	uint64_t idle_starttime = 0;
 	uint64_t prof_starttime = 0;
 
+	uint32_t cloud_log_id = 0 ;
+	map<uint32_t,Message*> map_cloudlogid2msg;
+	map<uint32_t,uint32_t> map_cloudlogid2counter;
+
 	while(!simulation->is_done()) {
 
 		prof_starttime = get_sys_clock();
@@ -244,35 +268,55 @@ RC CalvinSequencerThread::run() {
 			INC_STATS(_thd_id,seq_idle_time,get_sys_clock() - idle_starttime);
 			idle_starttime = 0;
 		}
-
 		auto rtype = msg->get_rtype();
-		switch (rtype) {
-			case CL_QRY:
-			case CL_QRY_O:
-#if CC_ALG == HDCC || CC_ALG == SNAPPER
-			case RTXN:
-#endif
-				// Query from client
-				DEBUG("SEQ process_txn\n");
-				seq_man.process_txn(msg,get_thd_id(),0,0,0,0);
-				// Don't free message yet
-				break;
-			case CALVIN_ACK:
-				// Ack from server
-				DEBUG("SEQ process_ack (%ld,%ld) from %ld\n", msg->get_txn_id(), msg->get_batch_id(),
-							msg->get_return_id());
-				seq_man.process_ack(msg,get_thd_id());
-				// Free message here
-				msg->release();
-				break;
-			case CALVIN_ABORT:
-				seq_man.process_abort(msg, get_thd_id());
-				// Don't free message yet
-				break;
-			default:
-				assert(false);
+		if(rtype == CL_QRY || rtype == CL_QRY_O)
+		{
+			Message * log_txn_msg = Message::create_message(CLOUD_LOG_TXN);
+			LogCloudTxnMessage * log_msg = (LogCloudTxnMessage*)(log_txn_msg);
+			uint64_t temp_txn_id= cloud_log_id * g_node_cnt + g_node_id;
+			cloud_log_id++;
+			log_msg->txn_id = temp_txn_id;
+			log_msg->copy_from_msg(msg);
+			for (uint64_t j = 0; j < g_storage_log_node_cnt; j++) { //这个for循环是向每个storage发消息
+				Message * msg_copy = Message::create_message(CLOUD_LOG_TXN);
+				LogCloudTxnMessage*log_msg_copy=(LogCloudTxnMessage*)msg_copy;
+				memcpy(log_msg_copy,log_msg,sizeof(LogCloudTxnMessage));
+				msg_queue.enqueue(get_thd_id(), msg_copy, g_node_cnt + g_client_node_cnt + j);
+			}
+			log_txn_msg->release();
+			map_cloudlogid2counter[temp_txn_id] = 0;
+			map_cloudlogid2msg[temp_txn_id] = msg;
+		}else if(msg->get_rtype() == CLOUD_LOG_TXN_ACK)
+		{
+			LogFlushedMessage * log_flush_msg = (LogFlushedMessage*)(msg);
+			map_cloudlogid2counter[log_flush_msg->txn_id]++;
+			if(map_cloudlogid2counter[log_flush_msg->txn_id] == g_storage_log_node_cnt)
+			{
+				Message * client_msg = map_cloudlogid2msg[log_flush_msg->txn_id];
+				assert(client_msg);
+				seq_man.process_txn(client_msg,get_thd_id(),0,0,0,0);
+				map_cloudlogid2counter.erase(log_flush_msg->txn_id);
+				map_cloudlogid2msg.erase(log_flush_msg->txn_id);
+			}
+			msg->release();			
+		}else{
+			switch (rtype) {
+				case CALVIN_ACK:
+					// Ack from server
+					DEBUG("SEQ process_ack (%ld,%ld) from %ld\n", msg->get_txn_id(), msg->get_batch_id(),
+								msg->get_return_id());
+					seq_man.process_ack(msg,get_thd_id());
+					// Free message here
+					msg->release();
+					break;
+				case CALVIN_ABORT:
+					seq_man.process_abort(msg, get_thd_id());
+					// Don't free message yet
+					break;
+				default:
+					assert(false);
+			}
 		}
-
 		INC_STATS(_thd_id,mtx[32],get_sys_clock() - prof_starttime);
 		prof_starttime = get_sys_clock();
 	}

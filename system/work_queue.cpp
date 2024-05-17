@@ -24,7 +24,15 @@
 void QWorkQueue::init() {
 
 	last_sched_dq = NULL;
+#if CC_ALG != CALVIN_W
 	sched_ptr = 0;
+#else
+	sched_ptr = (uint64_t*)malloc(sizeof(uint64_t) * g_sched_thread_cnt);
+	for(uint32_t i = 0 ; i < g_sched_thread_cnt ; i++)
+	{
+		sched_ptr[i] = 0;
+	}
+#endif
 #ifdef NEW_WORK_QUEUE
 	work_queue.set_capacity(QUEUE_CAPACITY_NEW);
 	new_txn_queue.set_capacity(QUEUE_CAPACITY_NEW);
@@ -40,10 +48,19 @@ void QWorkQueue::init() {
 	aria_check_queue = new boost::lockfree::queue<work_queue_entry* >(0);
 	aria_commit_queue = new boost::lockfree::queue<work_queue_entry* >(0);
 #endif
+#if CC_ALG != CALVIN_W
 	sched_queue = new boost::lockfree::queue<work_queue_entry* > * [g_node_cnt];
 	for ( uint64_t i = 0; i < g_node_cnt; i++) {
 		sched_queue[i] = new boost::lockfree::queue<work_queue_entry* > (0);
 	}
+#else
+	// WhiteBear: 因为可以有多个scheduler，所以sched_queue的队列数量翻倍，
+	// 前g_node_cnt个队列属于第0个scheduler，第二组属于第1个scheduler.......
+	sched_queue = new boost::lockfree::queue<work_queue_entry* > * [g_node_cnt * g_sched_thread_cnt];
+	for ( uint64_t i = 0; i < g_node_cnt * g_sched_thread_cnt; i++) {
+		sched_queue[i] = new boost::lockfree::queue<work_queue_entry* > (0);
+	}
+#endif
 #endif
 	txn_queue_size = 0;
 	work_queue_size = 0;
@@ -273,14 +290,18 @@ Message* QWorkQueue::work_dequeue(uint64_t thd_id) {
 	return msg;
 }
 #endif
-
+// WhiteBear: 和原本Calvin的代码逻辑不同，该代码里是NODE0的SCH0维持了对NOD0和NOD1的SEQ队列，将NOD0的SEQ队列事务处理完去处理NOD1的SEQ事务，处理完后进入下一个事务批次。
+// 现在假设一个节点有三个locker，共两个节点，那么就要有六个SCHE对SEQ的消息队列，其中两两相同。
 void QWorkQueue::sched_enqueue(uint64_t thd_id, Message * msg) {
+#if CC_ALG != CALVIN_W
 	assert(CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == SNAPPER);
+#endif
 	assert(msg);
 	assert(ISSERVERN(msg->return_node_id));
 	uint64_t starttime = get_sys_clock();
 
 	DEBUG_M("QWorkQueue::sched_enqueue work_queue_entry alloc\n");
+#if CC_ALG != CALVIN_W
 	work_queue_entry * entry = (work_queue_entry*)mem_allocator.alloc(sizeof(work_queue_entry));
 	entry->msg = msg;
 	entry->rtype = msg->rtype;
@@ -292,21 +313,72 @@ void QWorkQueue::sched_enqueue(uint64_t thd_id, Message * msg) {
 	uint64_t mtx_time_start = get_sys_clock();
 	while (!sched_queue[msg->get_return_id()]->push(entry) && !simulation->is_done()) {
 	}
+#else
+	// WhiteBear: RDONE是新复制几份，进入不同的队列，其余类型是同消息进入多个队列
+	if(msg->rtype == RDONE)
+	{
+		for(UInt32 i = 1 ; i < g_sched_thread_cnt ; i++)
+		{
+			Message * msg_copy = (Message*)mem_allocator.alloc(sizeof(DoneMessage));
+			memcpy(msg_copy,msg,sizeof(DoneMessage));
+			UInt32 interval = i * g_node_cnt;
+			work_queue_entry * entry = (work_queue_entry*)mem_allocator.alloc(sizeof(work_queue_entry));
+			entry->msg = msg_copy;
+			entry->rtype = msg_copy->rtype;
+			entry->txn_id = msg_copy->txn_id;
+			entry->batch_id = msg_copy->batch_id;
+			entry->starttime = get_sys_clock();
+			while (!sched_queue[msg->get_return_id() + interval]->push(entry) && !simulation->is_done()) {
+			}
+		}
+		work_queue_entry * entry = (work_queue_entry*)mem_allocator.alloc(sizeof(work_queue_entry));
+		entry->msg = msg;
+		entry->rtype = msg->rtype;
+		entry->txn_id = msg->txn_id;
+		entry->batch_id = msg->batch_id;
+		entry->starttime = get_sys_clock();
+		while (!sched_queue[msg->get_return_id()]->push(entry) && !simulation->is_done()) {
+		}
+	}
+	else
+	{
+		for(UInt32 i = 0 ; i < g_sched_thread_cnt ; i++)
+		{
+			UInt32 interval = i * g_node_cnt;
+			work_queue_entry * entry = (work_queue_entry*)mem_allocator.alloc(sizeof(work_queue_entry));
+			entry->msg = msg;
+			entry->rtype = msg->rtype;
+			entry->txn_id = msg->txn_id;
+			entry->batch_id = msg->batch_id;
+			entry->starttime = get_sys_clock();
+			while (!sched_queue[msg->get_return_id() + interval]->push(entry) && !simulation->is_done()) {
+			}
+		}
+	}
+	uint64_t mtx_time_start = get_sys_clock();
+#endif
 	INC_STATS(thd_id,mtx[37],get_sys_clock() - mtx_time_start);
 
 	INC_STATS(thd_id,sched_queue_enqueue_time,get_sys_clock() - starttime);
 	INC_STATS(thd_id,sched_queue_enq_cnt,1);
 }
 
+// WhiteBear: 此处可能需要修改sched_dequeue，使最后一个给该事务加完锁的线程传递给worker
+// 现在需要知道该locker要取哪几个SCHE对不同节点SEQ的消息队列
 Message * QWorkQueue::sched_dequeue(uint64_t thd_id) {
 	uint64_t starttime = get_sys_clock();
-
+#if CC_ALG != CALVIN_W
 	assert(CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == SNAPPER);
+#endif
 	Message * msg = NULL;
 	work_queue_entry * entry = NULL;
-
+#if CC_ALG != CALVIN_W
 	bool valid = sched_queue[sched_ptr]->pop(entry);
-
+#else
+	uint32_t locker_id = thd_id % g_sched_thread_cnt;		// 当前是第几个locker
+	uint64_t interval = locker_id * g_node_cnt;
+	bool valid = sched_queue[sched_ptr[locker_id] + interval]->pop(entry);
+#endif
 	if(valid) {
 
 		msg = entry->msg;
@@ -318,17 +390,33 @@ Message * QWorkQueue::sched_dequeue(uint64_t thd_id) {
 
 		DEBUG_M("QWorkQueue::sched_enqueue work_queue_entry free\n");
 		mem_allocator.free(entry,sizeof(work_queue_entry));
-
+		if(!msg) assert(false);
 		if(msg->rtype == RDONE) {
 			// Advance to next queue or next epoch
+#if CC_ALG != CALVIN_W
 			DEBUG("Sched RDONE %ld %ld\n",sched_ptr,simulation->get_worker_epoch());
 			assert(msg->get_batch_id() == simulation->get_worker_epoch());
+#else
+			assert(msg->get_batch_id() == simulation->get_worker_epoch(locker_id));
+#endif
+#if CC_ALG != CALVIN_W
 			if(sched_ptr == g_node_cnt - 1) {
-				INC_STATS(thd_id,sched_epoch_cnt,1);
+#else
+			if(sched_ptr[locker_id] == g_node_cnt - 1) {
+#endif
+				INC_STATS(thd_id,sched_epoch_cnt,1); 
 				INC_STATS(thd_id,sched_epoch_diff,get_sys_clock()-simulation->last_worker_epoch_time);
+#if CC_ALG != CALVIN_W
 				simulation->next_worker_epoch();
+#else
+				simulation->next_worker_epoch(locker_id);
+#endif
 			}
+#if CC_ALG != CALVIN_W
 			sched_ptr = (sched_ptr + 1) % g_node_cnt;
+#else
+			sched_ptr[locker_id] = (sched_ptr[locker_id] + 1) % g_node_cnt;
+#endif	
 #if CC_ALG != SNAPPER
 			msg->release();
 			msg = NULL;
@@ -336,9 +424,13 @@ Message * QWorkQueue::sched_dequeue(uint64_t thd_id) {
 
 		} else {
 			simulation->inc_epoch_txn_cnt();
+#if CC_ALG != CALVIN_W
 			DEBUG("Sched msg dequeue %ld (%ld,%ld) %ld\n", sched_ptr, msg->txn_id, msg->batch_id,
 						simulation->get_worker_epoch());
 			assert(msg->batch_id == simulation->get_worker_epoch());
+#else
+			assert(msg->batch_id == simulation->get_worker_epoch(locker_id));
+#endif
 		}
 
 		INC_STATS(thd_id,sched_queue_dequeue_time,get_sys_clock() - starttime);

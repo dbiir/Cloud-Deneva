@@ -4,6 +4,7 @@
 #include "msg_queue.h"
 #include "mem_alloc.h"
 #include <fstream>
+#include "benchmarks/ycsb_query.h"
 
 
 void Logger::init(const char * log_file_name, const char * txn_file_name) {
@@ -121,25 +122,48 @@ void LogRecord::copyRecord(LogRecord* record) {
   memcpy(rcd.before_and_after_image, record->rcd.before_and_after_image, rcd.image_size*2);
 }
 
+bool Logger::writeCloudTxn2File(LogRecord*rec,uint64_t thd_id)
+{
+  writeToBuffer(thd_id,rec->rcd.before_and_after_image,rec->rcd.image_size);
+  flushBuffer(thd_id, false, thd_id);
+  return true;
+}
 
+// WhiteBear: 这里可能需要改
 void Logger::enqueueRecord(LogRecord* record) {
   DEBUG("Enqueue Log Record %ld\n",record->rcd.txn_id);
   uint64_t id = record->rcd.txn_id % g_storage_log_thread_cnt;
   log_queue[id]->push(record);
 }
-
+// WhiteBear: 这里需要ok
 void Logger::processRecord(uint64_t thd_id, uint64_t id) {
   LogRecord * record = NULL;
+  
   bool valid = log_queue[id]->pop(record);
 
   if(valid) {
     uint64_t starttime = get_sys_clock();
     DEBUG("Dequeue Log Record %ld\n",record->rcd.txn_id);
-    if(record->rcd.iud == L_C_FLUSH) {
+    if(record->rcd.iud == L_C_FLUSH) {//iud需要新增，flushBuffer()也需要修改
       flushBuffer(thd_id, false, id);
+      mem_allocator.free(record,sizeof(LogRecord));
     } else if(record->rcd.iud == L_FLUSH) {
       flushBuffer(thd_id, true, id);
-    } else {
+      mem_allocator.free(record,sizeof(LogRecord));
+    } else if(record->rcd.iud == L_CLOUD_TXN) {
+      if(writeCloudTxn2File(record,thd_id))
+      {
+        msg_queue.enqueue(thd_id,Message::create_message(record->rcd.txn_id,CLOUD_LOG_TXN_ACK),record->rcd.txn_id % g_node_cnt);
+      }
+      if(WORKLOAD == YCSB)
+      {
+        mem_allocator.free(record,sizeof(LogRecord) + 240 + 2 * sizeof(uint64_t));
+      }
+      else
+      {
+        mem_allocator.free(record,sizeof(LogRecord) + 491 + 2 * sizeof(uint64_t));
+      }
+    }else {
       writeToBuffer(thd_id, record, id);
       log_buf_cnt++;
 
@@ -149,8 +173,8 @@ void Logger::processRecord(uint64_t thd_id, uint64_t id) {
       if (record->rcd.iud == L_COMMIT) {
         msg_queue.enqueue(thd_id,Message::create_message(record->rcd.txn_id,LOG_FLUSHED),record->rcd.txn_id % g_node_cnt);
       }
+      mem_allocator.free(record,sizeof(LogRecord));
     }
-    mem_allocator.free(record,sizeof(LogRecord));
     INC_STATS(thd_id,log_process_time,get_sys_clock() - starttime);
   }
 

@@ -43,6 +43,7 @@ int get_thdid_from_txnid(uint64_t txnid) { return txnid % g_thread_cnt; }
 
 uint64_t get_part_id(void *addr) { return ((uint64_t)addr / PAGE_SIZE) % g_part_cnt; }
 
+// WhiteBear: 此处可能需要修改，新建一个函数，YCSB可以按照求余进行分区。TPCC需要按表划分。
 uint64_t key_to_part(uint64_t key) {
 	return key % g_part_cnt;
 	// this function is called by hdcc.cpp only, another referene is actualy impossible

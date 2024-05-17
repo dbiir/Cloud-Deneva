@@ -14,12 +14,16 @@ enum LogRecType {
   LRT_INSERT,
   LRT_UPDATE,
   LRT_DELETE,
-  LRT_TRUNCATE
+  LRT_TRUNCATE,
+  LRT_CLOUD   // used for cloud db
 };
 enum LogIUD {
   L_INSERT = 0,
   L_UPDATE,
   L_DELETE,
+#if CC_ALG == CALVIN || CC_ALG == CALVIN_W
+  L_CLOUD_TXN,  // used for seq send each txn to storage
+#endif
   L_COMMIT,
   L_ABORT,
   L_FLUSH,
@@ -117,7 +121,7 @@ public:
 private:
   pthread_mutex_t mtx;
   uint64_t lsn;
-
+  bool writeCloudTxn2File(LogRecord* record,uint64_t thd_id);
   void flushBuffer(uint64_t thd_id,bool isLog,uint64_t id);
   boost::lockfree::queue<LogRecord *> ** log_queue;
   const char * log_file_name;

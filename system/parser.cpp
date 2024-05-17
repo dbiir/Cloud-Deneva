@@ -193,6 +193,12 @@ void parser(int argc, char * argv[]) {
   // Remove abort thread
   g_abort_thread_cnt = 0;
   g_total_thread_cnt -= 1;
+#elif CC_ALG == CALVIN_W
+  g_total_thread_cnt += 1;                  // sequencer
+  g_total_thread_cnt += g_sched_thread_cnt; // schedulers
+  // Remove abort thread
+  g_abort_thread_cnt = 0;
+  g_total_thread_cnt -= 1;
 #elif CC_ALG == HDCC
   g_total_thread_cnt += 3; // sequencer + scheduler thread + confilict stat thread
 #elif CC_ALG == SNAPPER

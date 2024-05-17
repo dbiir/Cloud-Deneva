@@ -77,7 +77,7 @@ RC TPCCTxnManager::run_txn() {
 	RC rc = RCOK;
 	uint64_t starttime = get_sys_clock();
 
-#if CC_ALG == CALVIN
+#if CC_ALG == CALVIN || CC_ALG == CALVIN_W
 	rc = run_calvin_txn();
 	return rc;
 #endif
@@ -141,7 +141,7 @@ bool TPCCTxnManager::is_done() {
 
 RC TPCCTxnManager::acquire_locks() {
 	uint64_t starttime = get_sys_clock();
-	assert(CC_ALG == CALVIN || CC_ALG == HDCC);
+	assert(CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == CALVIN_W);
 	locking_done = false;
 	RC rc = RCOK;
 	RC rc2;
@@ -2047,7 +2047,7 @@ RC TPCCTxnManager::process_aria_remote(ARIA_PHASE aria_phase) {
 RC TPCCTxnManager::run_tpcc_phase2() {
 	TPCCQuery* tpcc_query = (TPCCQuery*) query;
 	RC rc = RCOK;
-	assert(CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == SNAPPER);
+	assert(CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == SNAPPER || CC_ALG == CALVIN_W);
 
 	uint64_t w_id = tpcc_query->w_id;
 	uint64_t d_id = tpcc_query->d_id;
@@ -2124,7 +2124,7 @@ RC TPCCTxnManager::run_tpcc_phase2() {
 RC TPCCTxnManager::run_tpcc_phase5() {
 	TPCCQuery* tpcc_query = (TPCCQuery*) query;
 	RC rc = RCOK;
-	assert(CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == SNAPPER);
+	assert(CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == SNAPPER || CC_ALG == CALVIN_W);
 
 	uint64_t w_id = tpcc_query->w_id;
 	uint64_t d_id = tpcc_query->d_id;

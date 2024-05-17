@@ -86,7 +86,17 @@ private:
   RC send_remote_write_requests();
   RC process_aria_remote(ARIA_PHASE aria_phase);
 #endif
-
+#if CC_ALG == CALVIN_W
+/**
+ *@Author: WhiteBear
+ *@Data:2024-05-13 15:52
+ *@Description: 返回该key属于当前节点的哪个Scheduler(Locker)
+**/
+  UInt32 belong_sched_id(uint64_t key)
+  {
+    return key % g_sched_thread_cnt;
+  }
+#endif
   row_t * row;
 	YCSBWorkload * _wl;
 	YCSBRemTxnType state;

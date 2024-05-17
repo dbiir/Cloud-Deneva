@@ -13,7 +13,9 @@
 	 See the License for the specific language governing permissions and
 	 limitations under the License.
 */
-
+// WhiteBear: 原本的日志逻辑不需要动，每一个事务进来之后process改成往下发日志，日志的内容是根据负载解析一下，copy到log record的char*buf中，存好以后。
+// 在msg.h中新加一个日志消息。新建的msg塞到msg_queue里。 storage目前只处理了log msg，新建的消息类型的消息也要处理。处理消息是落盘然后返回ack，原本的
+// 逻辑是在log_flush被worker_thread接收，现在sequencer接收，只有日志刷下去的消息才可以放给scheduler组成batch。
 #include "global.h"
 #include "sequencer.h"
 #include "ycsb_query.h"
@@ -449,7 +451,9 @@ void Sequencer::send_next_batch(uint64_t thd_id) {
 	for(uint64_t j = 0; j < g_node_cnt; j++) {
 		while(fill_queue[j].pop(msg)) {
 			if(j == g_node_id) {
+					// WhiteBear: 
 					work_queue.sched_enqueue(thd_id,msg);
+					//向locker发消息，建议该消息是多个locker共用一个。消息的类型是不会转换的，此处的消息的类型为CL_QRY，其一直就为CL_QRY。
 			} else {
 				msg_queue.enqueue(thd_id,msg,j);
 			}
@@ -458,6 +462,7 @@ void Sequencer::send_next_batch(uint64_t thd_id) {
 			DEBUG("Seq RDONE %ld\n",simulation->get_seq_epoch())
 		}
 		msg = Message::create_message(RDONE);
+		//确定当前batch发完了，这个消息可以有多少个locker建多少个
 		msg->batch_id = simulation->get_seq_epoch();
 		if(j == g_node_id) {
 			work_queue.sched_enqueue(thd_id,msg);
@@ -476,7 +481,7 @@ void Sequencer::send_next_batch(uint64_t thd_id) {
 		INC_STATS(thd_id,seq_full_batch_cnt,1);
 	}
 	INC_STATS(thd_id,seq_prep_time,get_sys_clock() - prof_stat);
-#if CC_ALG == CALVIN
+#if CC_ALG == CALVIN || CC_ALG == CALVIN_W
 	next_txn_id = 0;
 #elif CC_ALG == HDCC || CC_ALG == SNAPPER
 	last_epoch_max_id = next_txn_id;
