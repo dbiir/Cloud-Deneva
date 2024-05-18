@@ -181,6 +181,7 @@ TxnManager::finish(RC rc)
 				access->data, this->commit_timestamp );
 			txn->accesses[ write_set[i] ]->orig_row->manager->release();
 			DEBUG("silo %ld commit release row %ld \n", this->get_txn_id(), txn->accesses[ write_set[i] ]->orig_row->get_primary_key());
+			access->orig_row->cache_node->dirty_batch = get_batch_id();
 		}
 	}
 	num_locks = 0;

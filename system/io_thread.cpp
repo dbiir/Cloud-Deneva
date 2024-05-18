@@ -75,6 +75,8 @@ void InputThread::setup() {
 						}
 						msg->release();
 						delete msg;
+					} else if (msg->rtype == RSTO) {
+						replay.request_enqueue(_thd_id, msg);
 					} else {
 						assert(false);
 					}
@@ -318,6 +320,8 @@ RC InputThread::storage_recv_loop() {
 				}
 				msg->release();
 				delete msg;
+			} else if (msg->rtype == RSTO) {
+				replay.request_enqueue(_thd_id, msg);
 			} else {
 				assert(false);
 			}

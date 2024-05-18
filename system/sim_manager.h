@@ -46,6 +46,8 @@ public:
   uint64_t txn_cnt;
   uint64_t inflight_cnt;
   uint64_t flushed_batch;
+  uint64_t now_batch;
+  uint64_t now_batch_txn_cnt;
   uint64_t last_da_query_time;
   ARIA_PHASE aria_phase;
   uint64_t batch_process_count;

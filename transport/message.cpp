@@ -163,6 +163,12 @@ Message * Message::create_message(RemReqType rtype) {
     case LOG_FLUSHED:
       msg = new LogFlushedMessage;
       break;
+    case RSTO:
+      msg = new RStorageMessage;
+      break;
+    case RSTO_RSP:
+      msg = new RStorageResponseMessage;
+      break;
     case CALVIN_ACK:
     case ARIA_ACK:
     case RACK_PREP:
@@ -396,6 +402,18 @@ void Message::release_message(Message * msg) {
       delete m_msg;
       break;
                       }
+    case RSTO: {
+      RStorageMessage * m_msg = (RStorageMessage*)msg;
+      m_msg->release();
+      delete m_msg;
+      break;
+    }
+    case RSTO_RSP: {
+      RStorageResponseMessage * m_msg = (RStorageResponseMessage*)msg;
+      m_msg->release();
+      delete m_msg;
+      break;
+    }
     case CALVIN_ACK:
     case ARIA_ACK:
     case RACK_PREP:
@@ -1699,6 +1717,98 @@ void LogRspMessage::copy_to_buf(char * buf) {
   //uint64_t ptr = Message::mget_size();
 }
 
+void RStorageMessage::copy_from_buf(char * buf) {
+  Message::mcopy_from_buf(buf);
+  uint64_t ptr = Message::mget_size();
+  COPY_VAL(size,buf,ptr);
+  table_ids.init(size);
+  keys.init(size);
+  for (uint64_t i = 0; i < size; i++) {
+    uint64_t table_id;
+    COPY_VAL(table_id,buf,ptr);
+    table_ids.add(table_id);
+    uint64_t key;
+    COPY_VAL(key,buf,ptr);
+    keys.add(key);
+  }
+  assert(ptr == get_size());
+}
+
+void RStorageMessage::copy_to_buf(char * buf) {
+  Message::mcopy_to_buf(buf);
+  uint64_t ptr = Message::mget_size();
+  size_t size = table_ids.size();
+  COPY_BUF(buf,size,ptr);
+  for (uint64_t i = 0; i < size; i++) {
+    uint64_t table_id = table_ids[i];
+    COPY_BUF(buf,table_id,ptr);
+    uint64_t key = keys[i];
+    COPY_BUF(buf,key,ptr);
+  }
+  assert(ptr == get_size());
+}
+
+void RStorageMessage::copy_from_txn(TxnManager* txn) {Message::mcopy_from_txn(txn);}
+
+void RStorageMessage::copy_to_txn(TxnManager* txn) {Message::mcopy_to_txn(txn);}
+
+uint64_t RStorageMessage::get_size() {
+  uint64_t size = Message::mget_size();
+  size += sizeof(size_t);
+  size += sizeof(uint64_t) * table_ids.size();
+  size += sizeof(uint64_t) * keys.size();
+  return size;
+}
+
+void RStorageMessage::release() {
+  table_ids.release();
+  keys.release();
+}
+
+void RStorageMessage::init() {}
+
+
+void RStorageResponseMessage::init() {}
+
+void RStorageResponseMessage::copy_from_buf(char * buf) {
+  Message::mcopy_from_buf(buf);
+  uint64_t ptr = Message::mget_size();
+  // COPY_VAL(size,buf,ptr);
+  // results.init(size);
+  // for (uint64_t i = 0; i < size; i++) {
+  //   uint64_t result;
+  //   COPY_VAL(result,buf,ptr);
+  //   results.add(result);
+  // }
+  assert(ptr == get_size());
+}
+
+void RStorageResponseMessage::copy_to_buf(char * buf) {
+  Message::mcopy_to_buf(buf);
+  uint64_t ptr = Message::mget_size();
+  // size_t size = results.size();
+  // COPY_BUF(buf,size,ptr);
+  // for (uint64_t i = 0; i < size; i++) {
+  //   uint64_t result = results[i];
+  //   COPY_BUF(buf,result,ptr);
+  // }
+  assert(ptr == get_size());
+}
+
+void RStorageResponseMessage::copy_from_txn(TxnManager* txn) {Message::mcopy_from_txn(txn);}
+
+void RStorageResponseMessage::copy_to_txn(TxnManager* txn) {Message::mcopy_to_txn(txn);}
+
+uint64_t RStorageResponseMessage::get_size() {
+  uint64_t size = Message::mget_size();
+  // size += sizeof(size_t);
+  // size += sizeof(uint64_t) * results.size();
+  return size;
+}
+
+void RStorageResponseMessage::release() {
+  // results.release();
+}
 
 
 /************************/

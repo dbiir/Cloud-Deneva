@@ -48,6 +48,7 @@
 #include "logger.h"
 #include "replay.h"
 #include "sim_manager.h"
+#include "cache_manager.h"
 
 #include <boost/lockfree/queue.hpp>
 #include "da_block_queue.h"
@@ -89,6 +90,7 @@ class Sequencer;
 class AriaSequencer;
 class Logger;
 class Replay;
+class CacheManager;
 class TimeTable;
 class InOutTable;
 class WkdbTimeTable;
@@ -144,6 +146,7 @@ extern Sequencer seq_man;
 extern AriaSequencer aria_seq;
 extern Logger logger;
 extern Replay replay;
+extern CacheManager row_cache;
 extern TimeTable time_table;
 extern DtaTimeTable dta_time_table;
 extern KeyXidCache dta_key_xid_cache;
@@ -228,6 +231,8 @@ extern uint64_t g_log_flush_timeout;
 // CLOUD
 extern uint64_t g_version_cnt;
 extern uint64_t g_replay_batch_size;
+extern uint64_t g_cache_max_row;
+extern uint64_t g_cache_list_num;
 
 extern UInt32 g_max_txn_per_part;
 extern int32_t g_load_per_server;
@@ -367,6 +372,8 @@ enum RemReqType {
     REQ_VALID,
     VALID,
     RPDONE,
+    RSTO,
+    RSTO_RSP,
   NO_MSG
 };
 

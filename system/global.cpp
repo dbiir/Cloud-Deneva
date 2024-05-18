@@ -96,6 +96,7 @@ AriaSequencer aria_seq;
 #endif
 Logger logger;
 Replay replay;
+CacheManager row_cache;
 TimeTable time_table;
 DtaTimeTable dta_time_table;
 KeyXidCache dta_key_xid_cache;
@@ -223,6 +224,8 @@ UInt32 g_this_dynamic_thread_cnt = ISCLIENT ? g_client_dynamic_thread_cnt : 0;
 // CLOUD
 uint64_t g_version_cnt = VERSION_CNT;
 uint64_t g_replay_batch_size = REPLAY_BATCH_SIZE;
+uint64_t g_cache_max_row = CACHE_MAX_ROW;
+uint64_t g_cache_list_num = CACHE_LIST_NUM;
 
 UInt32 g_max_txn_per_part = MAX_TXN_PER_PART;
 UInt32 g_network_delay = NETWORK_DELAY;

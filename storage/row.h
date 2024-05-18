@@ -76,6 +76,8 @@ public:
 	// not every row has a manager
 	void init_manager(row_t * row);
 	void free_manager();
+	void init_cache(row_t * row);
+	void free_cache();
 
 	table_t * get_table();
 	Catalog * get_schema();
@@ -170,6 +172,7 @@ public:
 	table_t * table;
 	version * versions;
 	uint64_t cur_ver;
+	CacheNode * cache_node;
 private:
 	// primary key should be calculated from the data stored in the row.
 	uint64_t 		_primary_key;

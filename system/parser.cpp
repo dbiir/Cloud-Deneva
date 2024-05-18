@@ -229,6 +229,8 @@ void parser(int argc, char * argv[]) {
   g_max_product_key *= g_node_cnt;
   g_max_supplier_key *= g_node_cnt;
 
+  g_servers_per_storage = g_node_cnt / g_storage_node_cnt;
+
     //g_inflight_max = g_inflight_max / g_node_cnt;
       printf("CC Alg %d\n",CC_ALG);
       printf("g_done_timer %ld\n",g_done_timer);
@@ -284,7 +286,4 @@ void parser(int argc, char * argv[]) {
     // Initialize client-specific globals
   if (g_node_id >= g_node_cnt) init_client_globals();
     init_globals();
-  if (ISSTORAGE) {
-    g_servers_per_storage = g_node_cnt / g_storage_node_cnt;
-  }
 }

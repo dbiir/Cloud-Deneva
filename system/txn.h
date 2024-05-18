@@ -67,8 +67,6 @@ public:
 	void reset(uint64_t thd_id);
 	void release_accesses(uint64_t thd_id);
 	void release_inserts(uint64_t thd_id);
-	void do_insert();
-	void do_delete();
 	void release(uint64_t thd_id);
 	//vector<Access*> accesses;
 	Array<Access*> accesses;
@@ -175,6 +173,7 @@ public:
 	virtual void get_read_write_set() {};
 	virtual RC		acquire_lock(row_t * row, access_t acctype) {return RCOK;};
 #endif
+	void			process_cache(uint64_t thd_id, Message * msg);
 	void            register_thread(Thread * h_thd);
 	uint64_t        get_thd_id();
 	Workload *      get_wl();
@@ -202,6 +201,10 @@ public:
 	RC start_commit();
 	RC start_abort();
 	RC abort();
+
+	void do_insert();
+	void do_delete();
+	uint64_t hash_key_or_wh_to_cache(row_t * row);
 
 	void release_locks(RC rc);
 	bool isRecon() {

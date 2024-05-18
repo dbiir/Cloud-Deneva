@@ -114,6 +114,9 @@ void WorkerThread::fakeprocess(Message * msg) {
         rc = process_rtxn(msg);
 #endif
 				break;
+      case RSTO_RSP:
+        rc = process_rsto_rsp(msg);
+        break;
 			case LOG_FLUSHED:
         rc = process_log_flushed(msg);
 				break;
@@ -219,6 +222,9 @@ void WorkerThread::process(Message * msg) {
         rc = process_rtxn(msg);
 #endif
 				break;
+      case RSTO_RSP:
+        rc = process_rsto_rsp(msg);
+        break;
 			case LOG_FLUSHED:
         rc = process_log_flushed(msg);
 				break;
@@ -589,7 +595,7 @@ RC WorkerThread::run() {
         bool success = ATOM_CAS(simulation->batch_process_count, g_aria_batch_size, 0);
         assert(success);
         if (!isAriaCommit) {
-          if (simulation->aria_phase == ARIA_RESERVATION || simulation->aria_phase == ARIA_CHECK) {
+          if (g_mpr != 0 && (simulation->aria_phase == ARIA_RESERVATION || simulation->aria_phase == ARIA_CHECK)) {
             for (uint64_t i = 0; i < g_node_cnt; i++) {
               if (i == g_node_id) continue;
               msg_queue.enqueue(_thd_id, Message::create_message(ARIA_ACK), i);
@@ -1358,6 +1364,14 @@ RC WorkerThread::process_log_flushed(Message * msg) {
   }
   // }
   return RCOK;
+}
+
+//[ ]: 增加统计信息
+RC WorkerThread::process_rsto_rsp(Message * msg) {
+  txn_man->process_cache(get_thd_id(), msg);
+  RC rc = txn_man->run_txn();
+  check_if_done(rc);
+  return rc;
 }
 
 RC WorkerThread::process_rfwd(Message * msg) {
