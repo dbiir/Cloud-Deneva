@@ -805,12 +805,16 @@ RC TxnManager::start_commit() {
 		}
 		if(rc == RCOK) {
 #if SINGLE_WRITE_NODE
-			log_records.push_back(logger.createRecord(get_txn_id(),L_COMMIT,0,0,0,0));
-			for (uint64_t j = 0; j < g_storage_log_node_cnt; j++) {
-				Message * msg = Message::create_message(log_records, LOG_MSG);
-				msg_queue.enqueue(get_thd_id(), msg, g_node_cnt + g_client_node_cnt + j);
+			if (!query->readonly()) {
+				log_records.push_back(logger.createRecord(get_txn_id(),L_COMMIT,0,0,0,0));
+				for (uint64_t j = 0; j < g_storage_log_node_cnt; j++) {
+					Message * msg = Message::create_message(log_records, LOG_MSG);
+					msg_queue.enqueue(get_thd_id(), msg, g_node_cnt + g_client_node_cnt + j);
+				}
+				rc = WAIT_REM;
+			} else {
+				rc = commit();
 			}
-			rc = WAIT_REM;
 #endif
 			// rc = commit();
 		} else {
