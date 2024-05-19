@@ -348,6 +348,7 @@ RC Row_lock::lock_release(TxnManager * txn) {
                   entry->txn->txn_stats.cc_block_time += timespan;
                   entry->txn->txn_stats.cc_block_time_short += timespan;
 #endif
+        printf("batch=%ld, txn=%ld lock ready\n", entry->txn->get_batch_id(), entry->txn->get_txn_id());
         txn_table.restart_txn(txn->get_thd_id(), entry->txn->get_txn_id(),
                               entry->txn->get_batch_id());
               }

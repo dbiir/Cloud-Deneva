@@ -54,6 +54,7 @@ void TPCCTxnManager::reset() {
 		state = TPCC_STOCK_LEVEL0;
 	}
 	next_item_id = 0;
+	district_row = NULL;
 	TxnManager::reset();
 }
 
@@ -171,6 +172,9 @@ RC TPCCTxnManager::acquire_locks() {
 				index = _wl->i_warehouse;
 				item = index_read(index, w_id, part_id_w);
 				row_t * row = ((row_t *)item->location);
+
+				get_cache(row);
+
 				rc2 = get_lock(row,g_wh_update? WR:RD);
 				if (rc2 != RCOK) rc = rc2;
 
@@ -178,6 +182,9 @@ RC TPCCTxnManager::acquire_locks() {
 				key = distKey(d_id, d_w_id);
 				item = index_read(_wl->i_district, key, part_id_w);
 				row = ((row_t *)item->location);
+
+				get_cache(row);
+
 				rc2 = get_lock(row, WR);
 				if (rc2 != RCOK) rc = rc2;
 			}
@@ -204,6 +211,9 @@ RC TPCCTxnManager::acquire_locks() {
 					item = index_read(index, key, part_id_c_w);
 					row = (row_t *) item->location;
 				}
+
+				get_cache(row);
+
 				rc2  = get_lock(row, WR);
 				if (rc2 != RCOK) rc = rc2;
 			}
@@ -214,6 +224,9 @@ RC TPCCTxnManager::acquire_locks() {
 				index = _wl->i_warehouse;
 				item = index_read(index, w_id, part_id_w);
 				row_t * row = ((row_t *)item->location);
+
+				get_cache(row);
+
 				rc2 = get_lock(row,RD);
 				if (rc2 != RCOK) rc = rc2;
 			// Cust
@@ -221,12 +234,18 @@ RC TPCCTxnManager::acquire_locks() {
 				key = custKey(c_id, d_id, w_id);
 				item = index_read(index, key, wh_to_part(w_id));
 				row = (row_t *) item->location;
+
+				get_cache(row);
+
 				rc2 = get_lock(row, RD);
 				if (rc2 != RCOK) rc = rc2;
 			// Dist
 				key = distKey(d_id, w_id);
 				item = index_read(_wl->i_district, key, wh_to_part(w_id));
 				row = ((row_t *)item->location);
+
+				get_cache(row);
+
 				rc2 = get_lock(row, WR);
 				if (rc2 != RCOK) rc = rc2;
 			}
@@ -236,12 +255,18 @@ RC TPCCTxnManager::acquire_locks() {
 				key = tpcc_query->items[i]->ol_i_id;
 				item = index_read(_wl->i_item, key, 0);
 				row = ((row_t *)item->location);
+
+				get_cache(row);
+
 				rc2 = get_lock(row, RD);
 				if (rc2 != RCOK) rc = rc2;
 				key = stockKey(tpcc_query->items[i]->ol_i_id, tpcc_query->items[i]->ol_supply_w_id);
 				index = _wl->i_stock;
 				item = index_read(index, key, wh_to_part(tpcc_query->items[i]->ol_supply_w_id));
 				row = ((row_t *)item->location);
+
+				get_cache(row);
+
 				rc2 = get_lock(row, WR);
 				if (rc2 != RCOK) rc = rc2;
 			}
@@ -254,20 +279,23 @@ RC TPCCTxnManager::acquire_locks() {
 				index = _wl->i_customer_last;
 				item = index_read(index, key, wh_to_part(w_id));
 				row = ((row_t *)item->location);
-				rc2 = get_lock(row, RD);
-				if (rc2 != RCOK) rc = rc2;
 			} else {
 				key = custKey(c_id, d_id, w_id);
 				item = index_read(_wl->i_customer_id, key, wh_to_part(w_id));
 				row = (row_t *) item->location;
-				rc2 = get_lock(row, RD);
-				if (rc2 != RCOK) rc = rc2;
 			}
+			get_cache(row);
+
+			rc2 = get_lock(row, RD);
+			if (rc2 != RCOK) rc = rc2;
 			// Order
 			key = orderPrimaryKey(w_id, d_id, o_id);
 			index = _wl->i_order;
 			item = index_read(index, key, wh_to_part(w_id));
 			row = ((row_t *)item->location);
+
+			get_cache(row);
+
 			rc2 = get_lock(row, RD);
 			if (rc2 != RCOK) rc = rc2;
 			// Order line
@@ -276,6 +304,9 @@ RC TPCCTxnManager::acquire_locks() {
 			items = index_read_all(index, key, wh_to_part(w_id), count);
 			for (int i = 0; i < count; i++) {
 				row = ((row_t *)items[i]->location);
+
+				get_cache(row);
+
 				rc2 = get_lock(row, RD);
 				if (rc2 != RCOK) rc = rc2;
 			}
@@ -288,6 +319,9 @@ RC TPCCTxnManager::acquire_locks() {
 			index = _wl->i_neworder;
 			item = index_read(index, key, wh_to_part(w_id));
 			row = ((row_t *)item->location);
+
+			get_cache(row);
+
 			rc2 = get_lock(row, XP);
 			if (rc2 != RCOK) rc = rc2;
 			// Order
@@ -295,6 +329,9 @@ RC TPCCTxnManager::acquire_locks() {
 			index = _wl->i_order;
 			item = index_read(index, key, wh_to_part(w_id));
 			row = ((row_t *)item->location);
+
+			get_cache(row);
+
 			rc2 = get_lock(row, WR);
 			// [ ]: Not good to read from the row here.
 			row->get_value(O_C_ID, c_id);
@@ -305,6 +342,9 @@ RC TPCCTxnManager::acquire_locks() {
 			items = index_read_all(index, key, wh_to_part(w_id), count);
 			for (int i = 0; i < count; i++) {
 				row = ((row_t *)items[i]->location);
+
+				get_cache(row);
+
 				rc2 = get_lock(row, WR);
 				if (rc2 != RCOK) rc = rc2;
 			}
@@ -313,6 +353,9 @@ RC TPCCTxnManager::acquire_locks() {
 			key = custKey(c_id, d_id, w_id);
 			item = index_read(_wl->i_customer_id, key, wh_to_part(w_id));
 			row = (row_t *) item->location;
+
+			get_cache(row);
+
 			rc2 = get_lock(row, WR);
 			if (rc2 != RCOK) rc = rc2;
 			break;
@@ -322,14 +365,21 @@ RC TPCCTxnManager::acquire_locks() {
 			key = distKey(d_id, w_id);
 			item = index_read(_wl->i_district, key, wh_to_part(w_id));
 			row = ((row_t *)item->location);
+
+			get_cache(row);
+
 			rc2 = get_lock(row, RD);
 			if (rc2 != RCOK) rc = rc2;
+			row->get_value(D_NEXT_O_ID, tpcc_query->o_id);
 			// Order line
-			key = orderlineKey(w_id, d_id, o_id);
+			key = orderlineKey(w_id, d_id, tpcc_query->o_id - 10);
 			index = _wl->i_orderline;
 			items = index_read_all(index, key, wh_to_part(w_id), count);
 			for (int i = 0; i < count; i++) {
 				row = ((row_t *)items[i]->location);
+
+				get_cache(row);
+
 				rc2 = get_lock(row, RD);
 				if (rc2 != RCOK) rc = rc2;
 				uint64_t ol_i_id;
@@ -340,6 +390,9 @@ RC TPCCTxnManager::acquire_locks() {
 				index = _wl->i_stock;
 				item = index_read(index, key, wh_to_part(w_id));
 				row = ((row_t *)item->location);
+
+				get_cache(row);
+
 				rc2 = get_lock(row, RD);
 				if (rc2 != RCOK) rc = rc2;
 			}
@@ -352,6 +405,23 @@ RC TPCCTxnManager::acquire_locks() {
 	if(decr_lr() == 0) {
 		if (ATOM_CAS(lock_ready, false, true)) rc = RCOK;
 	}
+
+	if (row_wait_for_cache->size() > 0) {
+		Message * msg = Message::create_message(this,RSTO);
+		RStorageMessage * rmsg = (RStorageMessage *) msg;
+		rmsg->table_ids.init(need_require_cache_num);
+		rmsg->keys.init(need_require_cache_num);
+		for (uint64_t i = 0; i < row_wait_for_cache->size(); i++) {
+		if (row_wait_for_cache->at(i).second) {
+			rmsg->table_ids.add(row_wait_for_cache->at(i).first->get_table()->get_table_id());
+			rmsg->keys.add(row_wait_for_cache->at(i).first->get_primary_key());
+		}
+		}
+		msg_queue.enqueue(get_thd_id(), msg, g_node_id / g_servers_per_storage + g_node_cnt + g_client_node_cnt);
+	} else {
+		cache_ready = true;
+	}
+
 	txn_stats.wait_starttime = get_sys_clock();
 	locking_done = true;
 	INC_STATS(get_thd_id(),calvin_sched_time,get_sys_clock() - starttime);
@@ -812,7 +882,7 @@ RC TPCCTxnManager::run_txn_state() {
 			rc = run_stock_level_1(w_id, d_id, o_id, row_count, rows);
 			break;
 		case TPCC_STOCK_LEVEL2:
-			rc = run_stock_level_2(threshold, row_count, rows);
+			rc = run_stock_level_2(w_id, threshold, row_count, rows);
 			if (rc == RCOK) {
 				mem_allocator.free(rows, sizeof(row_t *) * row_count);
 			}
@@ -1661,7 +1731,7 @@ inline RC TPCCTxnManager::run_stock_level_1(uint64_t w_id, uint64_t d_id, uint64
 	RC rc;
 	itemid_t ** items;
 	int count;
-	uint64_t key = orderlineKey(w_id, d_id, d_next_o_id - 1);
+	uint64_t key = orderlineKey(w_id, d_id, d_next_o_id - 10);
 	INDEX * index = _wl->i_orderline;
 	items = index_read_all(index, key, wh_to_part(w_id), count);
 	item_count = count;
@@ -1679,17 +1749,15 @@ inline RC TPCCTxnManager::run_stock_level_1(uint64_t w_id, uint64_t d_id, uint64
 	return rc;
 }
 
-inline RC TPCCTxnManager::run_stock_level_2(uint64_t threshold, uint64_t &item_count, row_t **&r_local) {
+inline RC TPCCTxnManager::run_stock_level_2(uint64_t w_id, uint64_t threshold, uint64_t &item_count, row_t **&r_local) {
 	uint64_t starttime = get_sys_clock();
 	RC rc;
 	INDEX * index = _wl->i_stock;
 	row_t ** r_stock_local = (row_t **) mem_allocator.alloc(sizeof(row_t *) * item_count);
 	for (uint64_t i = 0; i < item_count; i++) {
 		uint64_t ol_i_id;
-		uint64_t ol_w_id;
 		r_local[i]->get_value(OL_I_ID, ol_i_id);
-		r_local[i]->get_value(OL_SUPPLY_W_ID, ol_w_id);
-		row_t * row = (row_t *) index_read(index, stockKey(ol_i_id, ol_w_id), wh_to_part(ol_w_id))->location;
+		row_t * row = (row_t *) index_read(index, stockKey(ol_i_id, w_id), wh_to_part(w_id))->location;
 		assert(row);
 		rc = get_row(row, RD, r_stock_local[i]);
 		if (rc != RCOK) return rc;
@@ -2112,6 +2180,7 @@ RC TPCCTxnManager::run_tpcc_phase2() {
 				rc = new_order_3( w_id, d_id, c_id, remote, ol_cnt, o_entry_d, &tpcc_query->o_id, row);
 				rc = new_order_4( w_id, d_id, c_id, remote, ol_cnt, o_entry_d, &tpcc_query->o_id, row);
 				tpcc_query->o_id = *(int64_t *) row->get_value(D_NEXT_O_ID);
+				district_row = row;
 				//rc = new_order_5( w_id, d_id, c_id, remote, ol_cnt, o_entry_d, &tpcc_query->o_id, row);
 			}
 				for(uint64_t i = 0; i < tpcc_query->ol_cnt; i++) {
@@ -2141,9 +2210,9 @@ RC TPCCTxnManager::run_tpcc_phase2() {
 		case TPCC_STOCK_LEVEL:
 			assert(w_loc);
 			rc = run_stock_level_0(w_id, d_id, o_id, row);
-			// rc = run_stock_level_1(w_id, d_id, tpcc_query->o_id + 1, row_count, rows);
-			rc = run_stock_level_1(w_id, d_id, o_id, row_count, rows);
-			rc = run_stock_level_2(threshold, row_count, rows);
+			rc = run_stock_level_1(w_id, d_id, tpcc_query->o_id, row_count, rows);
+			// rc = run_stock_level_1(w_id, d_id, o_id, row_count, rows);
+			rc = run_stock_level_2(w_id, threshold, row_count, rows);
 			mem_allocator.free(rows, sizeof(row_t *) * row_count);
 			break;
 		default:
@@ -2194,8 +2263,8 @@ RC TPCCTxnManager::run_tpcc_phase5() {
 			break;
 		case TPCC_NEW_ORDER :
 			if(w_loc) {
-				rc = new_order_4( w_id, d_id, c_id, remote, ol_cnt, o_entry_d, &tpcc_query->o_id, row);
-				rc = new_order_5( w_id, d_id, c_id, remote, ol_cnt, o_entry_d, &tpcc_query->o_id, row);
+				// rc = new_order_4( w_id, d_id, c_id, remote, ol_cnt, o_entry_d, &tpcc_query->o_id, row);
+				rc = new_order_5( w_id, d_id, c_id, remote, ol_cnt, o_entry_d, &tpcc_query->o_id, district_row);
 			}
 				for(uint64_t i = 0; i < tpcc_query->ol_cnt; i++) {
 

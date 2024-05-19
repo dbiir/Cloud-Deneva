@@ -1368,10 +1368,30 @@ RC WorkerThread::process_log_flushed(Message * msg) {
 
 //[ ]: 增加统计信息
 RC WorkerThread::process_rsto_rsp(Message * msg) {
+#if CC_ALG != CALVIN
   txn_man->process_cache(get_thd_id(), msg);
   RC rc = txn_man->run_txn();
   check_if_done(rc);
   return rc;
+#else
+  txn_man->process_cache(get_thd_id(), msg);
+  if (txn_man->cache_ready && txn_man->rtxn_but_wait) {
+    RC rc = txn_man->run_calvin_txn();
+    if (rc == RCOK && txn_man->calvin_exec_phase_done()) {
+      printf("batch=%ld, txn=%ld commit on rsto_rsp\n", txn_man->txn->batch_id, txn_man->txn->txn_id);
+      calvin_wrapup();
+    }
+  } else {
+    if (txn_man->rtxn_but_wait) {
+      printf("batch=%ld, txn=%ld wait for cache\n", txn_man->txn->batch_id, txn_man->txn->txn_id);
+    } else if (txn_man->cache_ready) {
+      printf("batch=%ld, txn=%ld wait for lock\n", txn_man->txn->batch_id, txn_man->txn->txn_id);
+    } else {
+      printf("batch=%ld, txn=%ld wait both\n", txn_man->txn->batch_id, txn_man->txn->txn_id);
+    }
+  }
+  return RCOK;
+#endif
 }
 
 RC WorkerThread::process_rfwd(Message * msg) {
@@ -1402,6 +1422,11 @@ RC WorkerThread::process_calvin_rtxn(Message * msg) {
         simulation->seconds_from_start(get_sys_clock()), txn_man->txn_stats.starttime);
   assert(ISSERVERN(txn_man->return_id));
   txn_man->txn_stats.local_wait_time += get_sys_clock() - txn_man->txn_stats.wait_starttime;
+  if (!txn_man->cache_ready) {
+    printf("batch=%ld, txn=%ld wait for cache\n", txn_man->txn->batch_id, txn_man->txn->txn_id);
+    txn_man->rtxn_but_wait = true;
+    return WAIT;
+  }
   // Execute
   RC rc = txn_man->run_calvin_txn();
   // if((txn_man->phase==6 && rc == RCOK) || txn_man->active_cnt == 0 || txn_man->participant_cnt ==
@@ -1414,6 +1439,7 @@ RC WorkerThread::process_calvin_rtxn(Message * msg) {
       return Abort;
     }
   #endif
+    printf("batch=%ld, txn=%ld commit on rsto_rsp\n", txn_man->txn->batch_id, txn_man->txn->txn_id);
     calvin_wrapup();
   }
   return RCOK;

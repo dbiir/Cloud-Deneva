@@ -75,12 +75,16 @@ RC row_t::switch_schema(table_t *host_table) {
 
 void row_t::init_cache(row_t * row) {
 	cache_node = (CacheNode *)mem_allocator.alloc(sizeof(CacheNode));
+	cache_node->prev = NULL;
+	cache_node->next = NULL;
 	cache_node->row = row;
 	cache_node->use_cache_num = -1;
 	cache_node->dirty_batch = 0;
 	cache_node->is_cache_required = false;
 	cache_node->locker = (pthread_mutex_t *) mem_allocator.alloc(sizeof(pthread_mutex_t));
 	pthread_mutex_init(cache_node->locker, NULL);
+	cache_node->wait_list_head = NULL;
+	cache_node->wait_list_tail = NULL;
 }
 
 void row_t::free_cache() {

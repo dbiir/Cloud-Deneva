@@ -68,14 +68,37 @@ RC YCSBTxnManager::acquire_locks() {
 		itemid_t * item;
 		item = index_read(index, req->key, part_id);
 		row_t * row = ((row_t *)item->location);
-		RC rc2 = get_lock(row,req->acctype);
+
+    get_cache(row);
+
+    RC rc2 = get_lock(row,req->acctype);
     if(rc2 != RCOK) {
       rc = rc2;
     }
 	}
   if(decr_lr() == 0) {
-    if (ATOM_CAS(lock_ready, false, true)) rc = RCOK;
+    if (ATOM_CAS(lock_ready, false, true)) {
+      // printf("batch=%ld, txn=%ld lock_ready\n", get_batch_id(), get_txn_id());
+      rc = RCOK;
+    }
   }
+
+  if (row_wait_for_cache->size() > 0) {
+    Message * msg = Message::create_message(this,RSTO);
+    RStorageMessage * rmsg = (RStorageMessage *) msg;
+    rmsg->table_ids.init(need_require_cache_num);
+    rmsg->keys.init(need_require_cache_num);
+    for (uint64_t i = 0; i < row_wait_for_cache->size(); i++) {
+      if (row_wait_for_cache->at(i).second) {
+        rmsg->table_ids.add(row_wait_for_cache->at(i).first->get_table()->get_table_id());
+        rmsg->keys.add(row_wait_for_cache->at(i).first->get_primary_key());
+      }
+    }
+    msg_queue.enqueue(get_thd_id(), msg, g_node_id / g_servers_per_storage + g_node_cnt + g_client_node_cnt);
+  } else {
+    cache_ready = true;
+  }
+
   txn_stats.wait_starttime = get_sys_clock();
   /*
   if(rc == WAIT && lock_ready_cnt == 0) {

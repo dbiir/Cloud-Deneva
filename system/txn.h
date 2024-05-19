@@ -174,6 +174,7 @@ public:
 	virtual RC		acquire_lock(row_t * row, access_t acctype) {return RCOK;};
 #endif
 	void			process_cache(uint64_t thd_id, Message * msg);
+	void			get_cache(row_t *&row);
 	void            register_thread(Thread * h_thd);
 	uint64_t        get_thd_id();
 	Workload *      get_wl();
@@ -348,6 +349,10 @@ public:
 	bool locking_done;
 	CALVIN_PHASE phase;
 	Array<row_t*> calvin_locked_rows;
+	uint64_t need_require_cache_num;
+	vector<pair<row_t*, bool>> * row_wait_for_cache; //<row, if need this txn require cache>
+	bool cache_ready;
+	bool rtxn_but_wait;
 	bool calvin_exec_phase_done();
 	bool calvin_collect_phase_done();
 

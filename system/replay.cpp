@@ -213,10 +213,10 @@ void Replay::process_request(uint64_t thd_id, Message * msg) {
         itemid_t * item;
         index->index_read(key, item, -1, thd_id);
         // row_t * row = (row_t *)item->location;
-        Message * rsp_msg = Message::create_message(RSTO_RSP);
-        rsp_msg->batch_id = msg->batch_id;
-        rsp_msg->txn_id = msg->txn_id;
-        msg_queue.enqueue(thd_id, rsp_msg, msg->return_node_id);
     }
+    Message * rsp_msg = Message::create_message(RSTO_RSP);
+    rsp_msg->batch_id = msg->batch_id;
+    rsp_msg->txn_id = msg->txn_id;
+    msg_queue.enqueue(thd_id, rsp_msg, msg->return_node_id);
 }
     

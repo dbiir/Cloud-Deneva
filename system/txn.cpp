@@ -310,7 +310,7 @@ void TxnManager::do_insert() {
 		m_item->valid = true;
 		row_cache.insert_to_tail(this, row, hash_key_or_wh_to_cache(row));
 #if CC_ALG == CALVIN
-		row->cache_node->dirty_batch = batch_id;
+		row->cache_node->dirty_batch = txn->batch_id;
 #else
 		row->cache_node->dirty_batch = txn->batch_id;
 #endif
@@ -391,6 +391,10 @@ void TxnManager::init(uint64_t thd_id, Workload * h_wl) {
 	phase = CALVIN_RW_ANALYSIS;
 	locking_done = false;
 	calvin_locked_rows.init(MAX_ROW_PER_TXN);
+	need_require_cache_num = 0;
+	row_wait_for_cache = new vector<pair<row_t*, bool>>();
+	cache_ready = false;
+	rtxn_but_wait = false;
 #endif
 #if CC_ALG == DLI_MVCC || CC_ALG == DLI_MVCC_OCC
 	is_abort = nullptr;
@@ -481,6 +485,10 @@ void TxnManager::reset() {
 	phase = CALVIN_RW_ANALYSIS;
 	locking_done = false;
 	calvin_locked_rows.clear();
+	need_require_cache_num = 0;
+	row_wait_for_cache->clear();
+	cache_ready = false;
+	rtxn_but_wait = false;
 #endif
 #if CC_ALG == SNAPPER
 	phase = CALVIN_RW_ANALYSIS;
@@ -543,6 +551,7 @@ void TxnManager::release() {
 
 #if CC_ALG == CALVIN
 	calvin_locked_rows.release();
+	delete row_wait_for_cache;
 #endif
 #if CC_ALG == SILO
   num_locks = 0;
@@ -1602,7 +1611,7 @@ RC TxnManager::get_row_post_wait(row_t *& row_rtn) {
 }
 
 void TxnManager::process_cache(uint64_t thd_id, Message * msg) {
-#if CC_ALG != CLAVIN
+#if CC_ALG != CALVIN
 	if (!ISSERVERN(msg->return_node_id)) {
 		row_t * row = this->last_row;
 		pthread_mutex_lock(row->cache_node->locker);
@@ -1620,8 +1629,77 @@ void TxnManager::process_cache(uint64_t thd_id, Message * msg) {
 		pthread_mutex_unlock(row->cache_node->locker);
 	}
 #else
-//[ ]: calvin
+	if (!ISSERVERN(msg->return_node_id)) {
+		for (auto it = row_wait_for_cache->begin(); it != row_wait_for_cache->end(); ) {
+			if (!it->second) {
+				++it;
+				continue;
+			}
+			row_t * row = it->first;
+			pthread_mutex_lock(row->cache_node->locker);
+			row_cache.insert_to_tail(this, row, hash_key_or_wh_to_cache(row));
+			row->cache_node->use_cache_num++;
+			printf("batch=%ld, txn=%ld get row=%ld cache after require\n", get_batch_id(), get_txn_id(), row->get_primary_key());
+			bool valid = ATOM_CAS(row->cache_node->is_cache_required, true, false);
+			assert(valid);
+			WaitTxnNode * node = row->cache_node->wait_list_head;
+			while (node) {
+				work_queue.enqueue(thd_id, Message::create_message(node->txn_man, RSTO_RSP), false);
+				LIST_REMOVE_HT(node, row->cache_node->wait_list_head, row->cache_node->wait_list_tail);
+				WaitTxnNode * old_node = node;
+				node = node->next;
+				mem_allocator.free(old_node, sizeof(WaitTxnNode));
+				row->cache_node->use_cache_num++;
+			}
+			pthread_mutex_unlock(row->cache_node->locker);
+			it = row_wait_for_cache->erase(it);
+		}
+	}
+	else {
+		for (auto it = row_wait_for_cache->begin(); it != row_wait_for_cache->end(); ) {
+		row_t * row = it->first;
+		pthread_mutex_lock(row->cache_node->locker);
+		if (row->cache_node->use_cache_num >= 0) {
+			// row->cache_node->use_cache_num++;
+			row_cache.move_to_tail(this, row->cache_node, hash_key_or_wh_to_cache(row));
+			it = row_wait_for_cache->erase(it);
+			printf("batch=%ld, txn=%ld get row=%ld cache after wait\n", get_batch_id(), get_txn_id(), row->get_primary_key());
+		} else {
+			++it;
+		}
+		pthread_mutex_unlock(row->cache_node->locker);
+		}
+	}
+	if (row_wait_for_cache->size() == 0) {
+		printf("batch=%ld, txn=%ld cache_ready\n", get_batch_id(), get_txn_id());
+		cache_ready = true;
+	}
 #endif
+}
+
+void TxnManager::get_cache(row_t *&row) {
+  pthread_mutex_lock(row->cache_node->locker);
+  if (row->cache_node->use_cache_num >= 0) {
+    row->cache_node->use_cache_num++;
+    row_cache.move_to_tail(this, row->cache_node, hash_key_or_wh_to_cache(row));
+    pthread_mutex_unlock(row->cache_node->locker);
+    printf("batch=%ld, txn=%ld get row=%ld\n", get_batch_id(), get_txn_id(), row->get_primary_key());
+  } else {
+    if (row->cache_node->is_cache_required == false) {
+      row->cache_node->is_cache_required = true;
+      pthread_mutex_unlock(row->cache_node->locker);
+      need_require_cache_num++;
+      row_wait_for_cache->emplace_back(row, true);
+      printf("batch=%ld, txn=%ld require row=%ld cache\n", get_batch_id(), get_txn_id(), row->get_primary_key());
+    } else {
+      WaitTxnNode *node = (WaitTxnNode *)mem_allocator.alloc(sizeof(WaitTxnNode));
+      node->txn_man = this;
+      LIST_PUT_TAIL(row->cache_node->wait_list_head, row->cache_node->wait_list_tail, node);
+      pthread_mutex_unlock(row->cache_node->locker);
+      row_wait_for_cache->emplace_back(row, false);
+      printf("batch=%ld, txn=%ld wait row=%ld cache\n", get_batch_id(), get_txn_id(), row->get_primary_key());
+    }
+  }
 }
 
 void TxnManager::insert_row(row_t * row, INDEX * index) {

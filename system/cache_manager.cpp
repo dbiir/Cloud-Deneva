@@ -59,7 +59,10 @@ bool CacheManager::remove_a_victim(TxnManager * txn, uint64_t hash_id) {
     CacheNode * node = head[hash_id];
     while (node != NULL) {
         if (node->dirty_batch <= simulation->flushed_batch && node->use_cache_num == 0) {
-            pthread_mutex_lock(node->locker);
+            if (pthread_mutex_trylock(node->locker) == EBUSY) {
+                node = node->next;
+                continue;
+            }
             if (node->use_cache_num == 0) {
                 if (ATOM_CAS(node->use_cache_num, 0, -1)) {
                     LIST_REMOVE_HT(node, head[hash_id], tail[hash_id]);
