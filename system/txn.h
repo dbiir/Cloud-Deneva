@@ -67,8 +67,6 @@ public:
 	void reset(uint64_t thd_id);
 	void release_accesses(uint64_t thd_id);
 	void release_inserts(uint64_t thd_id);
-	void do_insert();
-	void do_delete();
 	void release(uint64_t thd_id);
 	//vector<Access*> accesses;
 	Array<Access*> accesses;
@@ -175,13 +173,15 @@ public:
 	virtual void get_read_write_set() {};
 	virtual RC		acquire_lock(row_t * row, access_t acctype) {return RCOK;};
 #endif
+	void			process_cache(uint64_t thd_id, Message * msg);
+	void			get_cache(row_t *&row);
 #if CC_ALG == CALVIN && CALVIN_W
 	uint32_t acquired_lock_num = 0; // 用于确定当前事务有多少个数据项获得了锁
 	uint32_t sum_lock_num = 0;		// 当前事务总共有多少个数据项需要在当前节点获得锁
 	bool * lockers_has_watched;
 	bool worker_has_dealed;
 	bool has_ready = false;
-#endif
+#endif	
 	void            register_thread(Thread * h_thd);
 	uint64_t        get_thd_id();
 	Workload *      get_wl();
@@ -203,10 +203,16 @@ public:
 	uint64_t        incr_lr();
 	uint64_t        decr_lr();
 
+	void			next_batch(row_t *);
+
 	RC commit();
 	RC start_commit();
 	RC start_abort();
 	RC abort();
+
+	void do_insert();
+	void do_delete();
+	uint64_t hash_key_or_wh_to_cache(row_t * row);
 
 	void release_locks(RC rc);
 	bool isRecon() {
@@ -350,6 +356,10 @@ public:
 	bool locking_done;
 	CALVIN_PHASE phase;
 	Array<row_t*> calvin_locked_rows;
+	uint64_t need_require_cache_num;
+	vector<pair<row_t*, bool>> * row_wait_for_cache; //<row, if need this txn require cache>
+	bool cache_ready;
+	bool rtxn_but_wait;
 	bool calvin_exec_phase_done();
 	bool calvin_collect_phase_done();
 

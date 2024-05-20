@@ -46,7 +46,9 @@
 #include "pool.h"
 #include "txn_table.h"
 #include "logger.h"
+#include "replay.h"
 #include "sim_manager.h"
+#include "cache_manager.h"
 
 #include <boost/lockfree/queue.hpp>
 #include "da_block_queue.h"
@@ -87,6 +89,8 @@ class Client_txn;
 class Sequencer;
 class AriaSequencer;
 class Logger;
+class Replay;
+class CacheManager;
 class TimeTable;
 class InOutTable;
 class WkdbTimeTable;
@@ -141,6 +145,8 @@ extern Client_txn client_man;
 extern Sequencer seq_man;
 extern AriaSequencer aria_seq;
 extern Logger logger;
+extern Replay replay;
+extern CacheManager row_cache;
 extern TimeTable time_table;
 extern DtaTimeTable dta_time_table;
 extern KeyXidCache dta_key_xid_cache;
@@ -180,6 +186,7 @@ extern UInt32 g_storage_send_thread_cnt;
 extern bool g_storage_all_in_one;
 extern UInt32 g_storage_log_node_cnt;
 extern UInt32 g_storage_log_thread_cnt;
+extern UInt32 g_servers_per_storage;
 
 /******************************************/
 // Global Parameter
@@ -220,6 +227,12 @@ extern int32_t g_inflight_max;
 extern uint64_t g_msg_size;
 extern uint64_t g_log_buf_max;
 extern uint64_t g_log_flush_timeout;
+
+// CLOUD
+extern uint64_t g_version_cnt;
+extern uint64_t g_replay_batch_size;
+extern uint64_t g_cache_max_row;
+extern uint64_t g_cache_list_num;
 
 extern UInt32 g_max_txn_per_part;
 extern int32_t g_load_per_server;
@@ -354,16 +367,17 @@ enum RemReqType {
     LOG_MSG,
     LOG_MSG_RSP,
     LOG_FLUSHED,
-#if CC_ALG == CALVIN
     CLOUD_LOG_TXN,      // used for cloud db, seq send to storage
     CLOUD_LOG_TXN_ACK,  // used for cloud db, storage send to seq
-#endif
     CALVIN_ACK,
     CALVIN_ABORT,
     ARIA_ACK,
     CONF_STAT,
     REQ_VALID,
     VALID,
+    RPDONE,
+    RSTO,
+    RSTO_RSP,
   NO_MSG
 };
 

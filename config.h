@@ -43,8 +43,13 @@
 
 // ! Parameters used to locate distributed performance bottlenecks.
 
-#define SINGLE_WRITE_NODE false // Only one node writes data
-#define READONLY_OPTIMIZATION false // No more CC for read-only transaction
+// CLOUD
+#define SINGLE_WRITE_NODE true // Only one node writes data
+#define READONLY_OPTIMIZATION true // No more CC for read-only transaction
+#define VERSION_CNT 5 // The number of versions stored in the tuple
+#define REPLAY_BATCH_SIZE 1000 // The number of transactions replayed in one batch
+#define CACHE_MAX_ROW 1000000 // The maximum number of rows stored in the cache
+#define CACHE_LIST_NUM 512 // The number of cache lists
 
 // #define SECOND 130 // Set the queue monitoring time.
 #define SECOND 260 // Set the queue monitoring time.

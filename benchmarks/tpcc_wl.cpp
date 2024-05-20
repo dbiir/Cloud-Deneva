@@ -225,7 +225,7 @@ void TPCCWorkload::init_tab_item(int id) {
 	for (uint64_t i = id+1; i <= g_max_items; i+=g_init_parallelism) {
 		row_t * row;
 		uint64_t row_id;
-		t_item->get_new_row(row, 0, row_id);
+		t_item->get_new_row(row, i, row_id);
 		row->set_primary_key(i);
 		row->set_value(I_ID, i);
 		row->set_value(I_IM_ID, URand(1L,10000L));
@@ -248,7 +248,7 @@ void TPCCWorkload::init_tab_wh() {
 		// if(GET_NODE_ID(wh_to_part(wid)) != g_node_id) continue;
 		row_t * row;
 		uint64_t row_id;
-		t_warehouse->get_new_row(row, 0, row_id);
+		t_warehouse->get_new_row(row, wid, row_id);
 		row->set_primary_key(wid);
 
 		row->set_value(W_ID, wid);
@@ -283,7 +283,7 @@ void TPCCWorkload::init_tab_dist(uint64_t wid) {
 	for (uint64_t did = 1; did <= g_dist_per_wh; did++) {
 		row_t * row;
 		uint64_t row_id;
-		t_district->get_new_row(row, 0, row_id);
+		t_district->get_new_row(row, wid, row_id);
 		row->set_primary_key(distKey(did, wid));
 
 		row->set_value(D_ID, did);
@@ -319,7 +319,7 @@ void TPCCWorkload::init_tab_stock(int id, uint64_t wid) {
 	for (uint64_t sid = id + 1; sid <= g_max_items; sid+=g_init_parallelism) {
 		row_t * row;
 		uint64_t row_id;
-		t_stock->get_new_row(row, 0, row_id);
+		t_stock->get_new_row(row, wid, row_id);
 		row->set_primary_key(stockKey(sid, wid));
 		row->set_value(S_I_ID, sid);
 		row->set_value(S_W_ID, wid);
@@ -361,7 +361,7 @@ void TPCCWorkload::init_tab_cust(int id, uint64_t did, uint64_t wid) {
 	for (uint64_t cid = id+1; cid <= g_cust_per_dist; cid += g_init_parallelism) {
 		row_t * row;
 		uint64_t row_id;
-		t_customer->get_new_row(row, 0, row_id);
+		t_customer->get_new_row(row, wid, row_id);
 		row->set_primary_key(custKey(cid, did, wid));	// use custKey here, so additional consideration should be given when indexing Customer by name
 		row->set_value(C_ID, cid);
 		row->set_value(C_D_ID, did);
@@ -428,7 +428,7 @@ void TPCCWorkload::init_tab_cust(int id, uint64_t did, uint64_t wid) {
 void TPCCWorkload::init_tab_hist(uint64_t c_id, uint64_t d_id, uint64_t w_id) {
 	row_t * row;
 	uint64_t row_id;
-	t_history->get_new_row(row, 0, row_id);
+	t_history->get_new_row(row, w_id, row_id);
 	row->set_primary_key(0);
 	row->set_value(H_C_ID, c_id);
 	row->set_value(H_C_D_ID, d_id);
@@ -450,7 +450,7 @@ void TPCCWorkload::init_tab_order(int id, uint64_t did, uint64_t wid) {
 	for (uint64_t oid = id+1; oid <= g_cust_per_dist; oid+=g_init_parallelism) {
 		row_t * row;
 		uint64_t row_id;
-		t_order->get_new_row(row, 0, row_id);
+		t_order->get_new_row(row, wid, row_id);
 		row->set_primary_key(orderPrimaryKey(wid, did, oid));
 		uint64_t o_ol_cnt = 1;
 		uint64_t cid = get_permutation(count);
@@ -478,8 +478,9 @@ void TPCCWorkload::init_tab_order(int id, uint64_t did, uint64_t wid) {
 
 		// ORDER-LINE
 #if !TPCC_SMALL
-		for (uint64_t ol = 1; ol <= o_ol_cnt; ol++) {
-			t_orderline->get_new_row(row, 0, row_id);
+		// for (uint64_t ol = 1; ol <= o_ol_cnt; ol++) {
+		for (uint64_t ol = 1; ol <= 1; ol++) {
+			t_orderline->get_new_row(row, wid, row_id);
 			row->set_primary_key(orderlineKey(wid, did, oid));
 			row->set_value(OL_O_ID, oid);
 			row->set_value(OL_D_ID, did);
@@ -508,7 +509,7 @@ void TPCCWorkload::init_tab_order(int id, uint64_t did, uint64_t wid) {
 #endif
 		// NEW ORDER
 		if (oid > 2100) {
-			t_neworder->get_new_row(row, 0, row_id);
+			t_neworder->get_new_row(row, wid, row_id);
 			row->set_primary_key(orderPrimaryKey(wid, did, oid));
 			row->set_value(NO_O_ID, oid);
 			row->set_value(NO_D_ID, did);

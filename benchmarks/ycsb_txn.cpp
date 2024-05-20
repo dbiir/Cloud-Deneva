@@ -58,8 +58,7 @@ RC YCSBTxnManager::acquire_locks() {
 	if(this->acquired_lock_num == this->sum_lock_num &&
 		this->acquired_lock_num != 0)
 	{
-    printf("batch_id = %ld , txn_id = %ld , acquired_lock_num = %d , sum_lock_num = %d , rc = 3 .\n",
-  get_batch_id(),get_txn_id(),acquired_lock_num,sum_lock_num);
+    // printf("batch_id = %ld , txn_id = %ld , acquired_lock_num = %d , sum_lock_num = %d , rc = 3 .\n", get_batch_id(),get_txn_id(),acquired_lock_num,sum_lock_num);
 		return RC::WAIT;
 	}
 #endif
@@ -77,6 +76,8 @@ RC YCSBTxnManager::acquire_locks() {
   if(this->sum_lock_num == 0) need_count_sum_lock_num = true;
   assert(ycsb_query->requests.size() > 0);            
   //  后面没有对空事务进行处理的逻辑
+#else
+  bool belong_this_sched = true;
 #endif
 	for (uint32_t rid = 0; rid < ycsb_query->requests.size(); rid ++) {
 		ycsb_request * req = ycsb_query->requests[rid];
@@ -97,7 +98,10 @@ RC YCSBTxnManager::acquire_locks() {
 		itemid_t * item;
 		item = index_read(index, req->key, part_id);
 		row_t * row = ((row_t *)item->location);
-		RC rc2 = get_lock(row,req->acctype);
+
+    get_cache(row);
+
+    RC rc2 = get_lock(row,req->acctype);
     if(rc2 != RCOK) {
       rc = rc2;
     }
@@ -125,15 +129,32 @@ RC YCSBTxnManager::acquire_locks() {
     if (ATOM_CAS(lock_ready, false, true)) rc = RCOK;
   }
 #endif
+  if(belong_this_sched)
+  {
+    if (row_wait_for_cache->size() > 0) {
+      Message * msg = Message::create_message(this,RSTO);
+      RStorageMessage * rmsg = (RStorageMessage *) msg;
+      rmsg->table_ids.init(need_require_cache_num);
+      rmsg->keys.init(need_require_cache_num);
+      for (uint64_t i = 0; i < row_wait_for_cache->size(); i++) {
+        if (row_wait_for_cache->at(i).second) {
+          rmsg->table_ids.add(row_wait_for_cache->at(i).first->get_table()->get_table_id());
+          rmsg->keys.add(row_wait_for_cache->at(i).first->get_primary_key());
+        }
+      }
+      msg_queue.enqueue(get_thd_id(), msg, g_node_id / g_servers_per_storage + g_node_cnt + g_client_node_cnt);
+    } else {
+      cache_ready = true;
+    }
+  }
+
   txn_stats.wait_starttime = get_sys_clock();
   INC_STATS(get_thd_id(),calvin_sched_time,get_sys_clock() - starttime);
   locking_done = true;
 #if CALVIN_W
-  printf("batch_id = %ld , txn_id = %ld , acquired_lock_num = %d , sum_lock_num = %d , rc = %d .\n",
-  get_batch_id(),get_txn_id(),acquired_lock_num,sum_lock_num,rc);
+  // printf("batch_id = %ld , txn_id = %ld , acquired_lock_num = %d , sum_lock_num = %d , rc = %d .\n", get_batch_id(),get_txn_id(),acquired_lock_num,sum_lock_num,rc);
 #else
-  printf("batch_id = %ld , txn_id = %ld , rc = %d .\n",
-  get_batch_id(),get_txn_id(),rc);
+  // printf("batch_id = %ld , txn_id = %ld , rc = %d .\n",get_batch_id(),get_txn_id(),rc);
 #endif
   return rc;  //对于CALVIN来说，要么返回WAIT，要么返回RCOK
 }
@@ -434,6 +455,9 @@ RC YCSBTxnManager::run_ycsb_1(access_t acctype, row_t * row_local) {
 
   } else {
     assert(acctype == WR);
+#if CC_ALG == CALVIN
+    next_batch(row_local);
+#endif
 		int fid = 0;
 	  char * data = row_local->get_data();
 	  *(uint64_t *)(&data[fid * 100]) = 0;

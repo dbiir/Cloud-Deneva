@@ -114,6 +114,9 @@ void WorkerThread::fakeprocess(Message * msg) {
         rc = process_rtxn(msg);
 #endif
 				break;
+      case RSTO_RSP:
+        rc = process_rsto_rsp(msg);
+        break;
 			case LOG_FLUSHED:
         rc = process_log_flushed(msg);
 				break;
@@ -219,6 +222,9 @@ void WorkerThread::process(Message * msg) {
         rc = process_rtxn(msg);
 #endif
 				break;
+      case RSTO_RSP:
+        rc = process_rsto_rsp(msg);
+        break;
 			case LOG_FLUSHED:
         rc = process_log_flushed(msg);
 				break;
@@ -615,7 +621,7 @@ RC WorkerThread::run() {
         bool success = ATOM_CAS(simulation->batch_process_count, g_aria_batch_size, 0);
         assert(success);
         if (!isAriaCommit) {
-          if (simulation->aria_phase == ARIA_RESERVATION || simulation->aria_phase == ARIA_CHECK) {
+          if (g_mpr != 0 && (simulation->aria_phase == ARIA_RESERVATION || simulation->aria_phase == ARIA_CHECK)) {
             for (uint64_t i = 0; i < g_node_cnt; i++) {
               if (i == g_node_id) continue;
               msg_queue.enqueue(_thd_id, Message::create_message(ARIA_ACK), i);
@@ -1386,11 +1392,34 @@ RC WorkerThread::process_log_flushed(Message * msg) {
   return RCOK;
 }
 
-/**
- *@Author: WhiteBear
- *@Data:2024-05-11 19:53
- *@Description: 处理远程读消息
-**/
+//[ ]: 增加统计信息
+RC WorkerThread::process_rsto_rsp(Message * msg) {
+#if CC_ALG != CALVIN
+  txn_man->process_cache(get_thd_id(), msg);
+  RC rc = txn_man->run_txn();
+  check_if_done(rc);
+  return rc;
+#else
+  txn_man->process_cache(get_thd_id(), msg);
+  if (txn_man->cache_ready && txn_man->rtxn_but_wait) {
+    RC rc = txn_man->run_calvin_txn();
+    if (rc == RCOK && txn_man->calvin_exec_phase_done()) {
+      // printf("batch=%ld, txn=%ld commit on rsto_rsp\n", txn_man->txn->batch_id, txn_man->txn->txn_id);
+      calvin_wrapup();
+    }
+  } else {
+    if (txn_man->rtxn_but_wait) {
+      // printf("batch=%ld, txn=%ld wait for cache\n", txn_man->txn->batch_id, txn_man->txn->txn_id);
+    } else if (txn_man->cache_ready) {
+      // printf("batch=%ld, txn=%ld wait for lock\n", txn_man->txn->batch_id, txn_man->txn->txn_id);
+    } else {
+      // printf("batch=%ld, txn=%ld wait both\n", txn_man->txn->batch_id, txn_man->txn->txn_id);
+    }
+  }
+  return RCOK;
+#endif
+}
+
 RC WorkerThread::process_rfwd(Message * msg) {
   DEBUG("RFWD (%ld,%ld)\n",msg->get_txn_id(),msg->get_batch_id());
   txn_man->txn_stats.remote_wait_time += get_sys_clock() - txn_man->txn_stats.wait_starttime;
@@ -1424,6 +1453,11 @@ RC WorkerThread::process_calvin_rtxn(Message * msg) {
         simulation->seconds_from_start(get_sys_clock()), txn_man->txn_stats.starttime);
   assert(ISSERVERN(txn_man->return_id));
   txn_man->txn_stats.local_wait_time += get_sys_clock() - txn_man->txn_stats.wait_starttime;
+  if (!txn_man->cache_ready) {
+    // printf("batch=%ld, txn=%ld wait for cache\n", txn_man->txn->batch_id, txn_man->txn->txn_id);
+    txn_man->rtxn_but_wait = true;
+    return WAIT;
+  }
   // Execute
   // printf("batch_id = %ld , txn_id = %ld , will enter into run_calvin_txn().\n",txn_man->get_batch_id(),txn_man->get_txn_id());
   RC rc = txn_man->run_calvin_txn();
@@ -1437,11 +1471,8 @@ RC WorkerThread::process_calvin_rtxn(Message * msg) {
       return Abort;
     }
   #endif
+    // printf("batch=%ld, txn=%ld commit on rsto_rsp\n", txn_man->txn->batch_id, txn_man->txn->txn_id);
     calvin_wrapup();
-  }
-  else
-  {
-    printf("batch_id = %ld , txn_id = %ld , is = %d , done = %d .\n",txn_man->get_batch_id(),txn_man->get_txn_id(),rc,txn_man->calvin_exec_phase_done());
   }
   return RCOK;
 }

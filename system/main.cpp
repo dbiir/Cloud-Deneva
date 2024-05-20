@@ -201,6 +201,10 @@ int main(int argc, char *argv[]) {
 	fflush(stdout);
 	txn_table.init();
 	printf("Done\n");
+	printf("Initializing row cache...");
+	fflush(stdout);
+	row_cache.init();
+	fflush(stdout);
 #if CC_ALG == ARIA
 	printf("Initializing sequencer... ");
 	fflush(stdout);

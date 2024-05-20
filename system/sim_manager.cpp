@@ -36,6 +36,9 @@ void SimManager::init() {
 #endif
 	seq_epoch = 0;
 	rsp_cnt = g_total_node_cnt - 1;
+	flushed_batch = 0;
+	now_batch = 1;
+	now_batch_txn_cnt = 0;
 	aria_phase = ARIA_INIT;
 	batch_process_count = 0;
 	barrier_count = 0;

@@ -166,6 +166,8 @@ private:
 
   uint64_t next_item_id;
 
+  row_t * district_row;
+
 void next_tpcc_state();
 RC run_txn_state();
   bool is_done();
@@ -223,7 +225,7 @@ RC run_txn_state();
   RC run_delivery_7(uint64_t &sum_amount, row_t *&r_cust_local);
   RC run_stock_level_0(uint64_t w_id, uint64_t d_id, uint64_t &d_next_o_id, row_t *&r_dist_local);
   RC run_stock_level_1(uint64_t w_id, uint64_t d_id, uint64_t d_next_o_id, uint64_t &item_count, row_t **&r_orderline_local);
-  RC run_stock_level_2(uint64_t threshold, uint64_t &item_count, row_t **&r_local);
+  RC run_stock_level_2(uint64_t w_id, uint64_t threshold, uint64_t &item_count, row_t **&r_local);
 };
 
 #endif

@@ -15,6 +15,7 @@ TxnManager::validate_silo()
 	RC rc = RCOK;
 	// lock write tuples in the primary key order.
 	uint64_t wr_cnt = txn->write_cnt;
+	uint64_t xp_cnt = 0;
 	// write_set = (int *) mem_allocator.alloc(sizeof(int) * wr_cnt);
 	int cur_wr_idx = 0;
 	int read_set[txn->row_cnt - txn->write_cnt];
@@ -22,6 +23,8 @@ TxnManager::validate_silo()
 	for (uint64_t rid = 0; rid < txn->row_cnt; rid ++) {
 		if (txn->accesses[rid]->type == WR)
 			write_set[cur_wr_idx ++] = rid;
+		else if (txn->accesses[rid]->type == XP)
+			xp_cnt ++;
 		else 
 			read_set[cur_rd_idx ++] = rid;
 	}
@@ -53,7 +56,7 @@ TxnManager::validate_silo()
 				return rc;
 			}	
 		}	
-		for (uint64_t i = 0; i < txn->row_cnt - wr_cnt; i ++) {
+		for (uint64_t i = 0; i < txn->row_cnt - wr_cnt - xp_cnt; i ++) {
 			Access * access = txn->accesses[ read_set[i] ];
 			if (access->orig_row->manager->get_tid() != txn->accesses[read_set[i]]->tid) {
 				rc = Abort;
@@ -131,7 +134,7 @@ TxnManager::validate_silo()
 
 	// validate rows in the read set
 	// for repeatable_read, no need to validate the read set.
-	for (uint64_t i = 0; i < txn->row_cnt - wr_cnt; i ++) {
+	for (uint64_t i = 0; i < txn->row_cnt - wr_cnt - xp_cnt; i ++) {
 		Access * access = txn->accesses[ read_set[i] ];
 		bool success = access->orig_row->manager->validate(access->tid, false);
 		if (!success) {
@@ -173,10 +176,12 @@ TxnManager::finish(RC rc)
 		
 		for (uint64_t i = 0; i < txn->write_cnt; i++) {
 			Access * access = txn->accesses[ write_set[i] ];
+			next_batch(access->orig_row);
 			access->orig_row->manager->write( 
 				access->data, this->commit_timestamp );
 			txn->accesses[ write_set[i] ]->orig_row->manager->release();
 			DEBUG("silo %ld commit release row %ld \n", this->get_txn_id(), txn->accesses[ write_set[i] ]->orig_row->get_primary_key());
+			access->orig_row->cache_node->dirty_batch = get_batch_id();
 		}
 	}
 	num_locks = 0;

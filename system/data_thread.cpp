@@ -1,4 +1,5 @@
 #include "data_thread.h"
+#include "message.h"
 
 void DataThread::setup() {
     if(get_thd_id() == 0) {
@@ -7,8 +8,16 @@ void DataThread::setup() {
 }
 
 RC DataThread::run() {
-    // uint64_t id = get_thd_id() - g_thread_cnt - g_rem_thread_cnt - g_send_thread_cnt;
     tsetup();
-    while (!simulation->is_done()) {}
+    while (!simulation->is_done()) {
+        Message * msg = replay.request_dequeue(get_thd_id());
+        if (msg) {
+            replay.process_request(get_thd_id(), msg);
+            msg->release();
+            delete msg;
+        } else {
+            replay.replay_log(get_thd_id());
+        }
+    }
     return FINISH;
 }

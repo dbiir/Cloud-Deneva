@@ -180,22 +180,26 @@ void InputThread::setup() {
 					work_queue.enqueue(get_thd_id(),msg,false);
 				} else {					
 					if (msg->rtype == LOG_MSG) {
-						uint64_t record_cnt = ((LogMessage*)msg)->record_cnt;
-						LogRecord ** record = (LogRecord**)mem_allocator.alloc(sizeof(LogRecord*) * record_cnt);
+						LogMessage * log_msg = (LogMessage*)msg;
+						uint64_t record_cnt = log_msg->record_cnt;
 						for (uint64_t i = 0; i < record_cnt; i++) {
-							record[i] = ((LogMessage*)msg)->records[i];
-							logger.enqueueRecord(record[i]);
+							LogRecord * record = (LogRecord*)mem_allocator.alloc(sizeof(LogRecord) + log_msg->records[i]->rcd.image_size * 2 - 1);
+							memcpy(record, log_msg->records[i], sizeof(LogRecord) + log_msg->records[i]->rcd.image_size * 2 - 1);
+							replay.replay_enqueue(_thd_id, record);
+							logger.enqueueRecord(log_msg->records[i]);
 						}
+						msg->release();
 						delete msg;
-					}else if(msg->rtype == CLOUD_LOG_TXN)
-					{
+					}else if(msg->rtype == CLOUD_LOG_TXN){
 						LogRecord * record = (LogRecord*)mem_allocator.alloc(sizeof(LogRecord) + cloud_log_record_size + 2 * sizeof(uint64_t));
 						LogCloudTxnMessage * cmsg = (LogCloudTxnMessage*)msg;
 						init_log_record_by_msg(record,cmsg);
 						logger.enqueueRecord(record);
 						delete msg;
-					} else {
-							assert(false);
+					}else if(msg->rtype == RSTO) {
+						replay.request_enqueue(_thd_id, msg);
+					}else {
+						assert(false);
 					}
 				}
 			}
@@ -400,6 +404,11 @@ RC InputThread::server_recv_loop() {
 				continue;
 			}
 #endif
+			if (msg->rtype == RPDONE) {
+				simulation->flushed_batch = ((DoneMessage *)msg)->batch_id;
+				msgs->erase(msgs->begin());
+				continue;
+			}
 #ifdef FAKE_PROCESS
 			if (fakeprocess(msg))
 #endif
@@ -440,15 +449,19 @@ RC InputThread::storage_recv_loop() {
 					msgs->erase(msgs->begin());
 					continue;
 			} else if (msg->rtype == LOG_MSG) {
-				uint64_t record_cnt = ((LogMessage*)msg)->record_cnt;
-				LogRecord ** record = (LogRecord**)mem_allocator.alloc(sizeof(LogRecord*) * record_cnt);
+				LogMessage * log_msg = (LogMessage*)msg;
+				uint64_t record_cnt = log_msg->record_cnt;
 				for (uint64_t i = 0; i < record_cnt; i++) {
-					record[i] = ((LogMessage*)msg)->records[i];
-					logger.enqueueRecord(record[i]);
+					LogRecord * record = (LogRecord*)mem_allocator.alloc(sizeof(LogRecord) + log_msg->records[i]->rcd.image_size * 2 - 1);
+					memcpy(record, log_msg->records[i], sizeof(LogRecord) + log_msg->records[i]->rcd.image_size * 2 - 1);
+					replay.replay_enqueue(_thd_id, record);
+					logger.enqueueRecord(log_msg->records[i]);
 				}
+				msg->release();
 				delete msg;
-			}
-			else if(msg->rtype == CLOUD_LOG_TXN) {
+			}else if (msg->rtype == RSTO) {
+				replay.request_enqueue(_thd_id, msg);
+			}else if(msg->rtype == CLOUD_LOG_TXN) {
 				LogRecord * record = (LogRecord*)mem_allocator.alloc(sizeof(LogRecord) + cloud_log_record_size + 2 * sizeof(uint64_t));
 				LogCloudTxnMessage * cmsg = (LogCloudTxnMessage*)msg;
 				init_log_record_by_msg(record,cmsg);

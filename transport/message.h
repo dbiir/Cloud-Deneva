@@ -215,6 +215,34 @@ public:
   uint64_t array_size1;
   uint64_t array_size2;
 };
+class RStorageMessage : public Message {
+public:
+  void copy_from_buf(char * buf);
+  void copy_to_buf(char * buf);
+  void copy_from_txn(TxnManager * txn);
+  void copy_to_txn(TxnManager * txn);
+  uint64_t get_size();
+  void init();
+  void release();
+
+  uint64_t size;
+  Array<uint32_t> table_ids;
+  Array<uint64_t> keys;
+};
+
+class RStorageResponseMessage : public Message {
+public:
+  void copy_from_buf(char * buf);
+  void copy_to_buf(char * buf);
+  void copy_from_txn(TxnManager * txn);
+  void copy_to_txn(TxnManager * txn);
+  uint64_t get_size();
+  void init();
+  void release();
+
+  // uint64_t size;
+  // Array<uint64_t> results;
+};
 
 class QueryResponseMessage : public Message {
 public:

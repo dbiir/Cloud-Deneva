@@ -63,6 +63,12 @@ class Row_hdcc;
 class Row_snapper;
 class Row_aria;
 
+struct version {
+	uint64_t batch_id;
+	uint64_t valid_until;
+	char * data;
+};
+
 class row_t {
 public:
 	RC init(table_t * host_table, uint64_t part_id, uint64_t row_id = 0);
@@ -70,6 +76,8 @@ public:
 	// not every row has a manager
 	void init_manager(row_t * row);
 	void free_manager();
+	void init_cache(row_t * row);
+	void free_cache();
 
 	table_t * get_table();
 	Catalog * get_schema();
@@ -162,6 +170,9 @@ public:
 	char * data;
 	int tuple_size;
 	table_t * table;
+	version * versions;
+	uint64_t cur_ver;
+	CacheNode * cache_node;
 private:
 	// primary key should be calculated from the data stored in the row.
 	uint64_t 		_primary_key;
