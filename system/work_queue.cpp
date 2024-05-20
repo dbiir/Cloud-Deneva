@@ -24,7 +24,7 @@
 void QWorkQueue::init() {
 
 	last_sched_dq = NULL;
-#if CC_ALG != CALVIN_W
+#if !(CC_ALG == CALVIN && CALVIN_W)
 	sched_ptr = 0;
 #else
 	sched_ptr = (uint64_t*)malloc(sizeof(uint64_t) * g_sched_thread_cnt);
@@ -48,7 +48,7 @@ void QWorkQueue::init() {
 	aria_check_queue = new boost::lockfree::queue<work_queue_entry* >(0);
 	aria_commit_queue = new boost::lockfree::queue<work_queue_entry* >(0);
 #endif
-#if CC_ALG != CALVIN_W
+#if !(CC_ALG == CALVIN && CALVIN_W)
 	sched_queue = new boost::lockfree::queue<work_queue_entry* > * [g_node_cnt];
 	for ( uint64_t i = 0; i < g_node_cnt; i++) {
 		sched_queue[i] = new boost::lockfree::queue<work_queue_entry* > (0);
@@ -293,15 +293,13 @@ Message* QWorkQueue::work_dequeue(uint64_t thd_id) {
 // WhiteBear: 和原本Calvin的代码逻辑不同，该代码里是NODE0的SCH0维持了对NOD0和NOD1的SEQ队列，将NOD0的SEQ队列事务处理完去处理NOD1的SEQ事务，处理完后进入下一个事务批次。
 // 现在假设一个节点有三个locker，共两个节点，那么就要有六个SCHE对SEQ的消息队列，其中两两相同。
 void QWorkQueue::sched_enqueue(uint64_t thd_id, Message * msg) {
-#if CC_ALG != CALVIN_W
 	assert(CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == SNAPPER);
-#endif
 	assert(msg);
 	assert(ISSERVERN(msg->return_node_id));
 	uint64_t starttime = get_sys_clock();
 
 	DEBUG_M("QWorkQueue::sched_enqueue work_queue_entry alloc\n");
-#if CC_ALG != CALVIN_W
+#if !(CC_ALG == CALVIN && CALVIN_W)
 	work_queue_entry * entry = (work_queue_entry*)mem_allocator.alloc(sizeof(work_queue_entry));
 	entry->msg = msg;
 	entry->rtype = msg->rtype;
@@ -367,12 +365,10 @@ void QWorkQueue::sched_enqueue(uint64_t thd_id, Message * msg) {
 // 现在需要知道该locker要取哪几个SCHE对不同节点SEQ的消息队列
 Message * QWorkQueue::sched_dequeue(uint64_t thd_id) {
 	uint64_t starttime = get_sys_clock();
-#if CC_ALG != CALVIN_W
 	assert(CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == SNAPPER);
-#endif
 	Message * msg = NULL;
 	work_queue_entry * entry = NULL;
-#if CC_ALG != CALVIN_W
+#if !(CC_ALG == CALVIN && CALVIN_W)
 	bool valid = sched_queue[sched_ptr]->pop(entry);
 #else
 	uint32_t locker_id = thd_id % g_sched_thread_cnt;		// 当前是第几个locker
@@ -393,26 +389,26 @@ Message * QWorkQueue::sched_dequeue(uint64_t thd_id) {
 		if(!msg) assert(false);
 		if(msg->rtype == RDONE) {
 			// Advance to next queue or next epoch
-#if CC_ALG != CALVIN_W
+#if !(CC_ALG == CALVIN && CALVIN_W)
 			DEBUG("Sched RDONE %ld %ld\n",sched_ptr,simulation->get_worker_epoch());
 			assert(msg->get_batch_id() == simulation->get_worker_epoch());
 #else
 			assert(msg->get_batch_id() == simulation->get_worker_epoch(locker_id));
 #endif
-#if CC_ALG != CALVIN_W
+#if !(CC_ALG == CALVIN && CALVIN_W)
 			if(sched_ptr == g_node_cnt - 1) {
 #else
 			if(sched_ptr[locker_id] == g_node_cnt - 1) {
 #endif
 				INC_STATS(thd_id,sched_epoch_cnt,1); 
 				INC_STATS(thd_id,sched_epoch_diff,get_sys_clock()-simulation->last_worker_epoch_time);
-#if CC_ALG != CALVIN_W
+#if !(CC_ALG == CALVIN && CALVIN_W)
 				simulation->next_worker_epoch();
 #else
 				simulation->next_worker_epoch(locker_id);
 #endif
 			}
-#if CC_ALG != CALVIN_W
+#if !(CC_ALG == CALVIN && CALVIN_W)
 			sched_ptr = (sched_ptr + 1) % g_node_cnt;
 #else
 			sched_ptr[locker_id] = (sched_ptr[locker_id] + 1) % g_node_cnt;
@@ -424,7 +420,7 @@ Message * QWorkQueue::sched_dequeue(uint64_t thd_id) {
 
 		} else {
 			simulation->inc_epoch_txn_cnt();
-#if CC_ALG != CALVIN_W
+#if !(CC_ALG == CALVIN && CALVIN_W)
 			DEBUG("Sched msg dequeue %ld (%ld,%ld) %ld\n", sched_ptr, msg->txn_id, msg->batch_id,
 						simulation->get_worker_epoch());
 			assert(msg->batch_id == simulation->get_worker_epoch());

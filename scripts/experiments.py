@@ -46,11 +46,26 @@ fmt_title=["NODE_CNT","CC_ALG","ACCESS_PERC","TXN_WRITE_PERC","PERC_PAYMENT","MP
 ##############################
 # PLOTS
 ##############################
+def ycsb_calvin():
+    wl = 'YCSB'
+    nnodes = [2]
+    algos=['CALVIN','CALVIN_W']
+    base_table_size=1048576*8
+    txn_write_perc = [1]
+    tup_write_perc = [0.2]
+    load = [10000]
+    tcnt = [16]
+    skew = [0,0.2,0.4,0.6,0.8,0.99]
+    fmt = ["WORKLOAD","CC_ALG","ZIPF_THETA","NODE_CNT","SYNTH_TABLE_SIZE","TUP_WRITE_PERC","TXN_WRITE_PERC","MAX_TXN_IN_FLIGHT","THREAD_CNT"]
+    exp = [[wl,algo,sk,n,base_table_size*n,tup_wr_perc,txn_wr_perc,ld,thr] for thr,txn_wr_perc,tup_wr_perc,ld,n,sk,algo in itertools.product(tcnt,txn_write_perc,tup_write_perc,load,nnodes,skew,algos)]
+    return fmt,exp
+
+
 def ycsb_once():
     wl = 'YCSB'
     nnodes = [2]
-    algos=['HDCC']
-    base_table_size=1048576*8
+    algos=['CALVIN_W']
+    base_table_size=1048576
     txn_write_perc = [1]
     tup_write_perc = [0.2]
     load = [10000]
@@ -135,6 +150,22 @@ def ycsb_log():
     exp = [[wl,algo,log,n,base_table_size*n,tup_wr_perc,txn_wr_perc,ld,sk,thr] for thr,txn_wr_perc,tup_wr_perc,ld,n,sk,log,algo in itertools.product(tcnt,txn_write_perc,tup_write_perc,load,nnodes,skew,logging,algos)]
     return fmt,exp
 
+def tpcc_once():
+    wl = 'TPCC'
+    nnodes = [2]
+    algos=['CALVIN_W']
+    npercpay=[0.489]
+    num_wh=[32]
+    load = [10000]
+    tcnt = [16]
+    ctcnt = [4]
+    prorate = [0]
+    mpr = [0.15]
+    mpr_neworder = [0.1]
+    fmt = ["WORKLOAD","CC_ALG","NODE_CNT","PERC_PAYMENT","PRORATE_RATIO","NUM_WH","MAX_TXN_IN_FLIGHT","THREAD_CNT","CLIENT_THREAD_CNT","MPR","MPR_NEWORDER"]
+    exp = [[wl,algo,n,pp,prorate_rate,wh*n,tif,thr,cthr,m,mn] for thr,cthr,tif,pp,prorate_rate,n,m,mn,wh,algo in itertools.product(tcnt,ctcnt,load,npercpay,prorate,nnodes,mpr,mpr_neworder,num_wh,algos)]
+    return fmt,exp
+
 def tpcc_scaling():
     wl = 'TPCC'
     nnodes = [1,2,4,6,8,12]
@@ -184,12 +215,14 @@ def tpcc_dist_ratio():
 ##############################
 
 experiment_map = {
+    'ycsb_calvin': ycsb_calvin,
     'ycsb_once': ycsb_once,
     'ycsb_scaling': ycsb_scaling,
     'ycsb_writes': ycsb_writes,
     'ycsb_skew': ycsb_skew,
     'ycsb_dist_ratio': ycsb_dist_ratio,
     'ycsb_log': ycsb_log,
+    'tpcc_once': tpcc_once,
     'tpcc_scaling': tpcc_scaling,
     'tpcc_wh': tpcc_wh,
     'tpcc_dist_ratio': tpcc_dist_ratio,
@@ -220,8 +253,8 @@ configs = {
     "MAX_TXN_IN_FLIGHT": 10000,
     "NETWORK_DELAY": '0UL',
     "NETWORK_DELAY_TEST": 'false',
-    "DONE_TIMER": "1 * 60 * BILLION // ~1 minutes",
-    "WARMUP_TIMER": "1 * 60 * BILLION // ~1 minutes",
+    "DONE_TIMER": "1 * 30 * BILLION // ~1 minutes",
+    "WARMUP_TIMER": "1 * 30 * BILLION // ~1 minutes",
     "SEQ_BATCH_TIMER": "5 * 1 * MILLION // ~5ms -- same as CALVIN paper",
     "BATCH_TIMER" : "0",
     "PROG_TIMER" : "10 * BILLION // in s",

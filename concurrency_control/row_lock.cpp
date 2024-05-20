@@ -49,7 +49,7 @@ RC Row_lock::lock_get(lock_t type, TxnManager * txn) {
 }
 
 RC Row_lock::lock_get(lock_t type, TxnManager * txn, uint64_t* &txnids, int &txncnt) {
-    assert (CC_ALG == NO_WAIT || CC_ALG == WAIT_DIE || CC_ALG == CALVIN || CC_ALG == CALVIN_W);
+    assert (CC_ALG == NO_WAIT || CC_ALG == WAIT_DIE || CC_ALG == CALVIN);
     RC rc;
     uint64_t starttime = get_sys_clock();
     uint64_t lock_get_start_time = starttime;
@@ -73,7 +73,7 @@ RC Row_lock::lock_get(lock_t type, TxnManager * txn, uint64_t* &txnids, int &txn
 			conflict = true;
 		}
 	}
-    if ((CC_ALG == CALVIN || CC_ALG == CALVIN_W )&& !conflict) {
+    if (CC_ALG == CALVIN && !conflict) {
     if (waiters_head) conflict = true;
     }
 
@@ -153,7 +153,7 @@ RC Row_lock::lock_get(lock_t type, TxnManager * txn, uint64_t* &txnids, int &txn
               _row->get_primary_key(), (uint64_t)_row);
               rc = Abort;
             }
-        } else if (CC_ALG == CALVIN || CC_ALG == CALVIN_W){
+        } else if (CC_ALG == CALVIN){
             LockEntry * entry = get_entry();
             entry->start_ts = get_sys_clock();
             entry->txn = txn;
@@ -224,7 +224,7 @@ INC_STATS(txn->get_thd_id(),twopl_getlock_cnt,1);
 
 RC Row_lock::lock_release(TxnManager * txn) {
 
-#if CC_ALG == CALVIN || CC_ALG == CALVIN_W
+#if CC_ALG == CALVIN
     if (txn->isRecon()) {
         return RCOK;
     }
@@ -326,7 +326,7 @@ RC Row_lock::lock_release(TxnManager * txn) {
           _row->get_primary_key(), (uint64_t)_row);
           uint64_t timespan = get_sys_clock() - entry->txn->twopl_wait_start;
           entry->txn->twopl_wait_start = 0;
-#if CC_ALG != CALVIN && CC_ALG != CALVIN_W
+#if CC_ALG != CALVIN
           entry->txn->txn_stats.cc_block_time += timespan;
           entry->txn->txn_stats.cc_block_time_short += timespan;
 #endif
@@ -342,13 +342,16 @@ RC Row_lock::lock_release(TxnManager * txn) {
           }
           ASSERT(entry->txn->lock_ready == false);
       //if(entry->txn->decr_lr() == 0 && entry->txn->locking_done) {
-#if CC_ALG != CALVIN_W
+#if !CALVIN_W
           if(entry->txn->decr_lr() == 0) {
 #else
-            if(entry->txn->decr_lr() == 0 && entry->txn->sum_lock_num == entry->txn->acquired_lock_num) {
+            // printf("DOLOCK batch_id = %ld , txn_id = %ld , UNLOCK batch_id = %ld , th_id = %ld ; row_key = %ld .\n",
+            // entry->txn->get_batch_id(),entry->txn->get_txn_id(),txn->get_batch_id(),txn->get_txn_id(),this->_row->get_primary_key());
+            // fflush(stdout);
+            if(entry->txn->decr_lr() == 0 && entry->txn->sum_lock_num == entry->txn->acquired_lock_num) { 
 #endif
               if(ATOM_CAS(entry->txn->lock_ready,false,true)) {
-#if CC_ALG == CALVIN || CC_ALG == CALVIN_W
+#if CC_ALG == CALVIN
                   entry->txn->txn_stats.cc_block_time += timespan;
                   entry->txn->txn_stats.cc_block_time_short += timespan;
 #endif

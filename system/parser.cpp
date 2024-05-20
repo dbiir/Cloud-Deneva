@@ -188,12 +188,12 @@ void parser(int argc, char * argv[]) {
 #if LOGGING
   g_total_thread_cnt += g_logger_thread_cnt; // logger thread
 #endif
-#if CC_ALG == CALVIN
+#if CC_ALG == CALVIN && !CALVIN_W
     g_total_thread_cnt += 2; // sequencer + scheduler thread
   // Remove abort thread
   g_abort_thread_cnt = 0;
   g_total_thread_cnt -= 1;
-#elif CC_ALG == CALVIN_W
+#elif CC_ALG == CALVIN && CALVIN_W
   g_total_thread_cnt += 1;                  // sequencer
   g_total_thread_cnt += g_sched_thread_cnt; // schedulers
   // Remove abort thread

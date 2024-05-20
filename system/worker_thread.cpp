@@ -102,7 +102,7 @@ void WorkerThread::fakeprocess(Message * msg) {
       case CL_QRY:
       case CL_QRY_O:
 			case RTXN:
-#if CC_ALG == CALVIN || CC_ALG == CALVIN_W
+#if CC_ALG == CALVIN
         rc = process_calvin_rtxn(msg);
 #elif CC_ALG == HDCC || CC_ALG == SNAPPER
         if (msg->algo == CALVIN) {
@@ -205,7 +205,7 @@ void WorkerThread::process(Message * msg) {
       case CL_QRY:
       case CL_QRY_O:
 			case RTXN:
-#if CC_ALG == CALVIN || CC_ALG == CALVIN_W
+#if CC_ALG == CALVIN
         rc = process_calvin_rtxn(msg);
 #elif CC_ALG == ARIA
         rc = process_aria_rtxn(msg);
@@ -273,14 +273,17 @@ void WorkerThread::calvin_wrapup() {
   txn_man->commit_stats();
   DEBUG("(%ld,%ld) calvin ack to %ld\n", txn_man->get_txn_id(), txn_man->get_batch_id(),
         txn_man->return_id);
+  // printf("batch_id = %ld , txn_id = %ld , enter into calvin_wrapup() .\n",txn_man->get_batch_id(),txn_man->get_txn_id());
   if(txn_man->return_id == g_node_id) {
     // WhiteBear: 将做完这个事情返回给sequencer，因为是闭环负载
+    // printf("batch_id = %ld , txn_id = %ld , will return msg to sequencer.\n",txn_man->get_batch_id(),txn_man->get_txn_id());
     work_queue.sequencer_enqueue(_thd_id,Message::create_message(txn_man,CALVIN_ACK));
   } else {
+    // printf("batch_id = %ld , txn_id = %ld , will return msg to sequencer.\n",txn_man->get_batch_id(),txn_man->get_txn_id());
     msg_queue.enqueue(get_thd_id(), Message::create_message(txn_man, CALVIN_ACK),
                       txn_man->return_id);
   }
-#if CC_ALG == CALVIN_W
+#if CC_ALG == CALVIN && CALVIN_W
   bool can_release = true;
   for(UInt32 i = 0 ; i < g_sched_thread_cnt ; i++)
   {
@@ -393,7 +396,7 @@ void WorkerThread::abort() {
 }
 
 TxnManager * WorkerThread::get_transaction_manager(Message * msg) {
-#if CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == SNAPPER || CC_ALG == ARIA || CC_ALG == CALVIN_W
+#if CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == SNAPPER || CC_ALG == ARIA
   TxnManager* local_txn_man =
       txn_table.get_transaction_manager(get_thd_id(), msg->get_txn_id(), msg->get_batch_id());
 #else
@@ -487,11 +490,11 @@ RC WorkerThread::run() {
       txn_man = get_transaction_manager(msg);
       txn_man->algo = msg->algo;
 #else
-    if((msg->rtype != CL_QRY && msg->rtype != CL_QRY_O) || CC_ALG == CALVIN || CC_ALG == CALVIN_W) {
+    if((msg->rtype != CL_QRY && msg->rtype != CL_QRY_O) || CC_ALG == CALVIN) {
       txn_man = get_transaction_manager(msg);
 #endif
-
-      if (CC_ALG != CALVIN && CC_ALG != CALVIN_W && IS_LOCAL(txn_man->get_txn_id())) {
+      // printf("batch_id = %ld , txn_id = %ld , has been taken by worker%ld , msg_type = %d .\n",txn_man->get_batch_id(),txn_man->get_txn_id(),this->get_thd_id() , msg->get_rtype());
+      if (CC_ALG != CALVIN && IS_LOCAL(txn_man->get_txn_id())) {  
         if (msg->rtype != RTXN_CONT &&
             ((msg->rtype != RACK_PREP) || (txn_man->get_rsp_cnt() == 1))) {
           txn_man->txn_stats.work_queue_time_short += msg->lat_work_queue_time;
@@ -512,7 +515,7 @@ RC WorkerThread::run() {
       } else {
           txn_man->txn_stats.clear_short();
       }
-      if (CC_ALG != CALVIN && CC_ALG != CALVIN_W) {
+      if (CC_ALG != CALVIN) {
         txn_man->txn_stats.lat_network_time_start = msg->lat_network_time;
         txn_man->txn_stats.lat_other_time_start = msg->lat_other_time;
       }
@@ -597,6 +600,7 @@ RC WorkerThread::run() {
 #ifdef FAKE_PROCESS
     fakeprocess(msg);
 #else
+    // printf("batch_id = %ld , txn_id = %ld , will be process by worker%ld , msg_type.\n",txn_man->get_batch_id(),txn_man->get_txn_id(),this->get_thd_id());
     process(msg);
 #endif
 #if CC_ALG == ARIA  
@@ -637,7 +641,7 @@ RC WorkerThread::run() {
 
     // delete message
     ready_starttime = get_sys_clock();
-#if CC_ALG != CALVIN && CC_ALG != CALVIN_W
+#if CC_ALG != CALVIN
 #if CC_ALG == HDCC || CC_ALG == SNAPPER
   if (msg->algo == CALVIN) {
   } else {
@@ -660,7 +664,7 @@ RC WorkerThread::run() {
 
 RC WorkerThread::process_rfin(Message * msg) {
   DEBUG("RFIN %ld\n",msg->get_txn_id());
-  assert(CC_ALG != CALVIN && CC_ALG != CALVIN_W);
+  assert(CC_ALG != CALVIN);
 
   M_ASSERT_V(!IS_LOCAL(msg->get_txn_id()), "RFIN local: %ld %ld/%d\n", msg->get_txn_id(),
              msg->get_txn_id() % g_node_cnt, g_node_id);
@@ -1104,7 +1108,7 @@ RC WorkerThread::process_rtxn_cont(Message * msg) {
 RC WorkerThread::process_rprepare(Message * msg) {
   DEBUG("RPREP %ld\n",msg->get_txn_id());
     RC rc = RCOK;
-#if LOGGING && CC_ALG != CALVIN && CC_ALG != CALVIN_W
+#if LOGGING && CC_ALG != CALVIN
 #if CC_ALG == HDCC
   if (txn_man->algo != CALVIN) {
 #endif
@@ -1390,7 +1394,7 @@ RC WorkerThread::process_log_flushed(Message * msg) {
 RC WorkerThread::process_rfwd(Message * msg) {
   DEBUG("RFWD (%ld,%ld)\n",msg->get_txn_id(),msg->get_batch_id());
   txn_man->txn_stats.remote_wait_time += get_sys_clock() - txn_man->txn_stats.wait_starttime;
-  assert(CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == SNAPPER || CC_ALG == CALVIN_W);
+  assert(CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == SNAPPER);
 #if WORKLOAD == TPCC
   TPCCQuery * tpcc_query = (TPCCQuery*)txn_man->query;
   if (tpcc_query->txn_type == TPCC_NEW_ORDER && txn_man->get_txn_id() % g_node_cnt != g_node_id) {
@@ -1421,6 +1425,7 @@ RC WorkerThread::process_calvin_rtxn(Message * msg) {
   assert(ISSERVERN(txn_man->return_id));
   txn_man->txn_stats.local_wait_time += get_sys_clock() - txn_man->txn_stats.wait_starttime;
   // Execute
+  // printf("batch_id = %ld , txn_id = %ld , will enter into run_calvin_txn().\n",txn_man->get_batch_id(),txn_man->get_txn_id());
   RC rc = txn_man->run_calvin_txn();
   // if((txn_man->phase==6 && rc == RCOK) || txn_man->active_cnt == 0 || txn_man->participant_cnt ==
   // 1) {
@@ -1433,6 +1438,10 @@ RC WorkerThread::process_calvin_rtxn(Message * msg) {
     }
   #endif
     calvin_wrapup();
+  }
+  else
+  {
+    printf("batch_id = %ld , txn_id = %ld , is = %d , done = %d .\n",txn_man->get_batch_id(),txn_man->get_txn_id(),rc,txn_man->calvin_exec_phase_done());
   }
   return RCOK;
 }

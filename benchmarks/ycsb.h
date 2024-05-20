@@ -86,7 +86,7 @@ private:
   RC send_remote_write_requests();
   RC process_aria_remote(ARIA_PHASE aria_phase);
 #endif
-#if CC_ALG == CALVIN_W
+#if CALVIN_W
 /**
  *@Author: WhiteBear
  *@Data:2024-05-13 15:52

@@ -77,7 +77,7 @@ RC TPCCTxnManager::run_txn() {
 	RC rc = RCOK;
 	uint64_t starttime = get_sys_clock();
 
-#if CC_ALG == CALVIN || CC_ALG == CALVIN_W
+#if CC_ALG == CALVIN
 	rc = run_calvin_txn();
 	return rc;
 #endif
@@ -141,9 +141,19 @@ bool TPCCTxnManager::is_done() {
 
 RC TPCCTxnManager::acquire_locks() {
 	uint64_t starttime = get_sys_clock();
-	assert(CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == CALVIN_W);
+	assert(CC_ALG == CALVIN || CC_ALG == HDCC);
+#if CALVIN_W
+	uint64_t now_sched_id = get_thd_id() % g_sched_thread_cnt;
+	lockers_has_watched[now_sched_id] = true;
+	if(this->acquired_lock_num == this->sum_lock_num &&
+		this->acquired_lock_num != 0)
+	{
+		// printf("batch_id = %ld , txn_id = %ld , txn_type =  %d , rc = 3 .\n",get_batch_id(),get_txn_id(),((TPCCQuery*)query)->txn_type);
+		return RC::WAIT;
+	}
+#endif
 	locking_done = false;
-	RC rc = RCOK;
+	RC rc = WAIT;
 	RC rc2;
 	INDEX * index;
 	itemid_t * item;
@@ -153,7 +163,6 @@ RC TPCCTxnManager::acquire_locks() {
 	uint64_t key;
 	incr_lr();
 	TPCCQuery* tpcc_query = (TPCCQuery*) query;
-
 	uint64_t w_id = tpcc_query->w_id;
 	uint64_t d_id = tpcc_query->d_id;
 	uint64_t c_id = tpcc_query->c_id;
@@ -164,6 +173,21 @@ RC TPCCTxnManager::acquire_locks() {
 	uint64_t o_id = tpcc_query->o_id;
 	uint64_t part_id_w = wh_to_part(w_id);
 	uint64_t part_id_c_w = wh_to_part(c_w_id);
+#if CALVIN_W
+	bool belong_this_sched  = false;
+	bool need_count_sum_lock_num = false;
+	if(this->sum_lock_num == 0){
+		need_count_sum_lock_num = true;
+	}
+	set<int64_t> lock_keys;
+	set<int64_t> unlock_keys;
+	// if(tpcc_query->txn_type == TPCC_PAYMENT)
+	// {
+	// 	printf("batch_id = %ld , txn_id = %ld , locker_id = %ld , ZIPPER.\n",get_batch_id(),get_txn_id(),now_sched_id);
+	// 	fflush(stdout);
+	// }
+#endif
+#if !CALVIN_W
 	switch(tpcc_query->txn_type) {
 		case TPCC_PAYMENT:
 			if(GET_NODE_ID(part_id_w) == g_node_id) {
@@ -173,7 +197,6 @@ RC TPCCTxnManager::acquire_locks() {
 				row_t * row = ((row_t *)item->location);
 				rc2 = get_lock(row,g_wh_update? WR:RD);
 				if (rc2 != RCOK) rc = rc2;
-
 			// Dist
 				key = distKey(d_id, d_w_id);
 				item = index_read(_wl->i_district, key, part_id_w);
@@ -352,6 +375,371 @@ RC TPCCTxnManager::acquire_locks() {
 	if(decr_lr() == 0) {
 		if (ATOM_CAS(lock_ready, false, true)) rc = RCOK;
 	}
+	// printf("batch_id = %ld , txn_id = %ld , txn_type =  %d , rc = %d .\n",get_batch_id(),get_txn_id(),tpcc_query->txn_type,rc);
+#else
+	switch(tpcc_query->txn_type) {
+		case TPCC_PAYMENT:
+			if(GET_NODE_ID(part_id_w) == g_node_id) {
+				if(need_count_sum_lock_num) this->sum_lock_num+=2;
+				// WH
+				if(w_id % g_sched_thread_cnt == now_sched_id)
+				{
+					belong_this_sched = true;
+					index = _wl->i_warehouse;
+					item = index_read(index,w_id,part_id_w);
+					row_t * row = ((row_t *)item->location);
+					rc2 = get_lock(row,g_wh_update? WR:RD);
+					if(rc2 != RCOK) { rc = rc2 ; 
+					unlock_keys.insert(row->get_primary_key()); 
+					}
+					lock_keys.insert(row->get_primary_key());
+					this->acquired_lock_num++;
+				}
+				// Dist
+				if(d_w_id % g_sched_thread_cnt == now_sched_id)
+				{
+					belong_this_sched = true;
+					key = distKey(d_id, d_w_id);
+					item = index_read(_wl->i_district, key, part_id_w);
+					row = ((row_t *)item->location);
+					rc2 = get_lock(row, WR);
+					if (rc2 != RCOK) { rc = rc2 ;
+					unlock_keys.insert(row->get_primary_key()); 
+					}
+					lock_keys.insert(row->get_primary_key());
+					this->acquired_lock_num++;
+				}
+			}
+			if(GET_NODE_ID(part_id_c_w) == g_node_id) {
+			// Cust
+				if(need_count_sum_lock_num) this->sum_lock_num++;
+				row = NULL;
+				if (tpcc_query->by_last_name && c_w_id % g_sched_thread_cnt == now_sched_id) {
+					belong_this_sched = true;
+					key = custNPKey(c_last, c_d_id, c_w_id);
+					index = _wl->i_customer_last;
+					item = index_read(index, key, part_id_c_w);
+					int cnt = 0;
+					itemid_t * it = item;
+					itemid_t * mid = item;
+					while (it != NULL) {
+						cnt ++;
+						it = it->next;
+						if (cnt % 2 == 0) mid = mid->next;
+					}
+					row = ((row_t *)mid->location);
+					lock_keys.insert(row->get_primary_key());
+					this->acquired_lock_num++;
+				} else if(c_w_id % g_sched_thread_cnt == now_sched_id){
+					belong_this_sched = true;
+					key = custKey(c_id, c_d_id, c_w_id);
+					index = _wl->i_customer_id;
+					item = index_read(index, key, part_id_c_w);
+					row = (row_t *) item->location;
+					lock_keys.insert(row->get_primary_key());
+					this->acquired_lock_num++;
+				}
+				if(row != NULL)
+				{
+					rc2  = get_lock(row, WR);
+					if (rc2 != RCOK) { rc = rc2 ; 
+					unlock_keys.insert(row->get_primary_key()); 
+					}
+				}
+			}
+			break;
+		case TPCC_NEW_ORDER:
+			if(GET_NODE_ID(part_id_w) == g_node_id) {
+				if(need_count_sum_lock_num) this->sum_lock_num += 3;
+				if(w_id % g_sched_thread_cnt == now_sched_id)
+				{
+					// WH
+					belong_this_sched = true;
+					index = _wl->i_warehouse;
+					item = index_read(index, w_id, part_id_w);
+					row_t * row = ((row_t *)item->location);
+					rc2 = get_lock(row,RD);
+					if (rc2 != RCOK) { rc = rc2 ;
+					unlock_keys.insert(row->get_primary_key()); 
+					}
+					lock_keys.insert(row->get_primary_key());
+					this->acquired_lock_num++;
+					// Cust
+					index = _wl->i_customer_id;
+					key = custKey(c_id, d_id, w_id);
+					item = index_read(index, key, wh_to_part(w_id));
+					row = (row_t *) item->location;
+					rc2 = get_lock(row, RD);
+					if (rc2 != RCOK) { rc = rc2 ;
+					unlock_keys.insert(row->get_primary_key()); 
+					}
+					lock_keys.insert(row->get_primary_key());
+					this->acquired_lock_num++;
+					// Dist
+					key = distKey(d_id, w_id);
+					item = index_read(_wl->i_district, key, wh_to_part(w_id));
+					row = ((row_t *)item->location);
+					rc2 = get_lock(row, WR);
+					if (rc2 != RCOK) { rc = rc2 ; 
+					unlock_keys.insert(row->get_primary_key()); 
+					}
+					lock_keys.insert(row->get_primary_key());
+					this->acquired_lock_num++;
+				}	
+			}
+			// Items
+			for(uint64_t i = 0; i < tpcc_query->ol_cnt; i++) {
+				if (GET_NODE_ID(wh_to_part(tpcc_query->items[i]->ol_supply_w_id)) != g_node_id) continue;
+				if(need_count_sum_lock_num) this->sum_lock_num+=2;
+				if(tpcc_query->items[i]->ol_supply_w_id % g_sched_thread_cnt == now_sched_id)
+				{
+					belong_this_sched = true;
+					key = tpcc_query->items[i]->ol_i_id;
+					item = index_read(_wl->i_item, key, 0);
+					row = ((row_t *)item->location);
+					rc2 = get_lock(row, RD);
+					if (rc2 != RCOK) { rc = rc2 ; 
+					unlock_keys.insert(row->get_primary_key()); 
+					}
+					lock_keys.insert(row->get_primary_key());
+					this->acquired_lock_num++;
+					key = stockKey(tpcc_query->items[i]->ol_i_id, tpcc_query->items[i]->ol_supply_w_id);
+					index = _wl->i_stock;
+					item = index_read(index, key, wh_to_part(tpcc_query->items[i]->ol_supply_w_id));
+					row = ((row_t *)item->location);
+					rc2 = get_lock(row, WR);
+					if (rc2 != RCOK) { rc = rc2 ; 
+					unlock_keys.insert(row->get_primary_key()); 
+					}
+					lock_keys.insert(row->get_primary_key());
+					this->acquired_lock_num++;
+				}
+			}
+			break;
+		case TPCC_ORDER_STATUS:
+#if !READONLY_OPTIMIZATION
+			// Cust
+			if (tpcc_query->by_last_name) {
+				if(need_count_sum_lock_num) this->sum_lock_num++;
+				if(w_id % g_sched_thread_cnt == now_sched_id)
+				{	
+					belong_this_sched = true;
+					this->acquired_lock_num++;
+					key = custNPKey(c_last, d_id, w_id);
+					index = _wl->i_customer_last;
+					item = index_read(index, key, wh_to_part(w_id));
+					row = ((row_t *)item->location);
+					rc2 = get_lock(row, RD);
+					if (rc2 != RCOK) { rc = rc2 ;
+					// unlock_keys.insert(row->get_primary_key()); 
+					}
+				}
+			} else {
+				if(need_count_sum_lock_num) this->sum_lock_num++;
+				if(w_id % g_sched_thread_cnt == now_sched_id)
+				{	
+					belong_this_sched = true;
+					this->acquired_lock_num++;
+					key = custKey(c_id, d_id, w_id);
+					item = index_read(_wl->i_customer_id, key, wh_to_part(w_id));
+					row = (row_t *) item->location;
+					rc2 = get_lock(row, RD);
+					if (rc2 != RCOK) { rc = rc2 ;
+					// unlock_keys.insert(row->get_primary_key()); 
+					}
+				}
+			}
+			if(w_id % g_sched_thread_cnt != now_sched_id && need_count_sum_lock_num)
+			{
+				this->sum_lock_num = 0 ;
+				this->acquired_lock_num = 0;
+				rc = RC::WAIT;
+				break;
+			}
+			if(w_id % g_sched_thread_cnt == now_sched_id)
+			{
+				belong_this_sched = true;
+				// Order
+				key = orderPrimaryKey(w_id, d_id, o_id);
+				index = _wl->i_order;
+				item = index_read(index, key, wh_to_part(w_id));
+				row = ((row_t *)item->location);
+				rc2 = get_lock(row, RD);
+				if (rc2 != RCOK) { rc = rc2 ; 
+				// unlock_keys.insert(row->get_primary_key()); 
+				}
+				if(need_count_sum_lock_num) this->sum_lock_num ++;
+				this->acquired_lock_num++;
+				// Order line
+				key = orderlineKey(w_id, d_id, o_id);
+				index = _wl->i_orderline;
+				items = index_read_all(index, key, wh_to_part(w_id), count);
+				if(need_count_sum_lock_num) this->sum_lock_num += count;
+				for (int i = 0; i < count; i++) {
+					row = ((row_t *)items[i]->location);
+					rc2 = get_lock(row, RD);
+					if (rc2 != RCOK) { rc = rc2 ; 
+					// unlock_keys.insert(row->get_primary_key()); 
+					}
+					this->acquired_lock_num++;
+				}
+				mem_allocator.free(items, sizeof(itemid_t *) * count);
+			}			
+#else
+			if(decr_lr() == 0 && now_sched_id == 0){
+				this->acquired_lock_num = 7;
+				this->sum_lock_num = 7;
+				if (ATOM_CAS(lock_ready, false, true)) rc = RCOK;
+			}
+			txn_stats.wait_starttime = get_sys_clock();
+			locking_done = true;
+			INC_STATS(get_thd_id(),calvin_sched_time,get_sys_clock() - starttime);
+			// printf("batch_id = %ld , txn_id = %ld , locker_id = %ld , txn_type = %d , acquired_lock = %d , sum_lock_num = %d , rc = %d .\n",
+			// get_batch_id(),get_txn_id(),now_sched_id,tpcc_query->txn_type,this->acquired_lock_num,this->sum_lock_num,rc);
+			return rc;
+#endif
+			break;
+		case TPCC_DELIVERY:
+			// New Order
+			if(w_id % g_sched_thread_cnt != now_sched_id)
+			{
+				break;
+			}
+			if(need_count_sum_lock_num) this->sum_lock_num = 2;
+			belong_this_sched = true;
+			key = orderPrimaryKey(w_id, d_id, o_id);
+			index = _wl->i_neworder;
+			item = index_read(index, key, wh_to_part(w_id));
+			row = ((row_t *)item->location);
+			rc2 = get_lock(row, XP);
+			if (rc2 != RCOK) { rc = rc2 ; 
+			unlock_keys.insert(row->get_primary_key()); 
+			}
+			lock_keys.insert(row->get_primary_key());
+			this->acquired_lock_num++;
+			// Order
+			key = orderPrimaryKey(w_id, d_id, o_id);
+			index = _wl->i_order;
+			item = index_read(index, key, wh_to_part(w_id));
+			row = ((row_t *)item->location);
+			rc2 = get_lock(row, WR);
+			// [ ]: Not good to read from the row here.
+			row->get_value(O_C_ID, c_id);
+			if (rc2 != RCOK) { rc = rc2 ; 
+			unlock_keys.insert(row->get_primary_key()); 
+			}
+			lock_keys.insert(row->get_primary_key());
+			this->acquired_lock_num++;
+			// Order line
+			key = orderlineKey(w_id, d_id, o_id);
+			index = _wl->i_orderline;
+			items = index_read_all(index, key, wh_to_part(w_id), count);
+			if(need_count_sum_lock_num) this->sum_lock_num += count;
+			for (int i = 0; i < count; i++) {
+				row = ((row_t *)items[i]->location);
+				rc2 = get_lock(row, WR);
+				if (rc2 != RCOK) { rc = rc2 ; 
+				unlock_keys.insert(row->get_primary_key()); 
+				}
+				lock_keys.insert(row->get_primary_key());
+				this->acquired_lock_num++;
+			}
+			mem_allocator.free(items, sizeof(itemid_t *) * count);
+			// Cust
+			if(need_count_sum_lock_num) this->sum_lock_num ++;
+			key = custKey(c_id, d_id, w_id);
+			item = index_read(_wl->i_customer_id, key, wh_to_part(w_id));
+			row = (row_t *) item->location;
+			rc2 = get_lock(row, WR);
+			if (rc2 != RCOK) { rc = rc2 ; 
+			unlock_keys.insert(row->get_primary_key()); 
+			}
+			lock_keys.insert(row->get_primary_key());
+			this->acquired_lock_num++;
+			break;
+		case TPCC_STOCK_LEVEL:
+#if !READONLY_OPTIMIZATION		
+			if(w_id % g_sched_thread_cnt != now_sched_id)
+			{
+				break;
+			}
+			if(need_count_sum_lock_num) this->sum_lock_num += 1;
+			belong_this_sched = true;
+			// Dist
+			key = distKey(d_id, w_id);
+			item = index_read(_wl->i_district, key, wh_to_part(w_id));
+			row = ((row_t *)item->location);
+			rc2 = get_lock(row, RD);
+			if (rc2 != RCOK) { rc = rc2 ; 
+			// unlock_keys.insert(row->get_primary_key()); 
+			}
+			this->acquired_lock_num++;
+			// Order line
+			key = orderlineKey(w_id, d_id, o_id);
+			index = _wl->i_orderline;
+			items = index_read_all(index, key, wh_to_part(w_id), count);
+			if(need_count_sum_lock_num) this->sum_lock_num += (2*count);
+			for (int i = 0; i < count; i++) {
+				row = ((row_t *)items[i]->location);
+				rc2 = get_lock(row, RD);
+				if (rc2 != RCOK) { rc = rc2 ; 
+				// unlock_keys.insert(row->get_primary_key()); 
+				}
+				this->acquired_lock_num++;
+				uint64_t ol_i_id;
+				// [ ]: Not good to read from the row here.
+				row->get_value(OL_I_ID, ol_i_id);
+				// Stock
+				key = stockKey(ol_i_id, w_id);
+				index = _wl->i_stock;
+				item = index_read(index, key, wh_to_part(w_id));
+				row = ((row_t *)item->location);
+				rc2 = get_lock(row, RD);
+				if (rc2 != RCOK) { rc = rc2 ; 
+				// unlock_keys.insert(row->get_primary_key()); 
+				}
+				this->acquired_lock_num++;
+			}
+			mem_allocator.free(items, sizeof(itemid_t *) * count);
+#else
+			if(decr_lr() == 0 && now_sched_id == 0){
+				if (ATOM_CAS(lock_ready, false, true)) rc = RCOK;
+			}
+			// printf("batch_id = %ld , txn_id = %ld , locker_id = %ld , txn_type = %d , acquired_lock = %d , sum_lock_num = %d , rc = %d .\n",
+			// get_batch_id(),get_txn_id(),now_sched_id,tpcc_query->txn_type,this->acquired_lock_num,this->sum_lock_num,rc);
+			txn_stats.wait_starttime = get_sys_clock();
+			locking_done = true;
+			INC_STATS(get_thd_id(),calvin_sched_time,get_sys_clock() - starttime);
+			return rc;
+#endif
+			break;
+		default:
+			assert(false);
+	}
+	if(decr_lr() == 0 && this->acquired_lock_num == this->sum_lock_num && belong_this_sched)	{
+		if (ATOM_CAS(lock_ready, false, true)) rc = RCOK;
+	}
+	else
+	{
+		rc = RC::WAIT;
+	}
+	// std::string str_out = "batch_id = " + std::to_string(get_batch_id()) + " , txn_id = " + std::to_string(get_txn_id()) +
+	// 					" , locker_id = " + std::to_string(now_sched_id) + ", txn_type = " + std::to_string(tpcc_query->txn_type) +
+	// 					" , blocked_keys:";
+	// for(auto key : unlock_keys)
+	// {
+	// 	str_out += " " + std::to_string(key);
+	// }
+	// str_out += " , acquired_keys:";
+	// for(auto key : lock_keys) 
+	// {
+	// 	if(unlock_keys.find(key) != unlock_keys.end())
+	// 	{
+	// 		str_out += " " + std::to_string(key);
+	// 	}
+	// }
+	// printf("%s , acquired_lock = %d , sum_lock_num = %d , rc = %d .\n",str_out.c_str(),this->acquired_lock_num,this->sum_lock_num,rc);
+#endif
 	txn_stats.wait_starttime = get_sys_clock();
 	locking_done = true;
 	INC_STATS(get_thd_id(),calvin_sched_time,get_sys_clock() - starttime);
@@ -1630,7 +2018,7 @@ RC TPCCTxnManager::run_stock_level_0(uint64_t w_id, uint64_t d_id, uint64_t &d_n
 
 RC TPCCTxnManager::run_stock_level_1(uint64_t w_id, uint64_t d_id, uint64_t d_next_o_id, uint64_t &item_count, row_t **&r_orderline_local) {
 	uint64_t starttime = get_sys_clock();
-	RC rc;
+	RC rc = RCOK;
 	itemid_t ** items;
 	int count;
 	uint64_t key = orderlineKey(w_id, d_id, d_next_o_id - 1);
@@ -1650,7 +2038,7 @@ RC TPCCTxnManager::run_stock_level_1(uint64_t w_id, uint64_t d_id, uint64_t d_ne
 
 RC TPCCTxnManager::run_stock_level_2(uint64_t threshold, uint64_t &item_count, row_t **&r_local) {
 	uint64_t starttime = get_sys_clock();
-	RC rc;
+	RC rc= RCOK;
 	INDEX * index = _wl->i_stock;
 	row_t ** r_stock_local = (row_t **) mem_allocator.alloc(sizeof(row_t *) * item_count);
 	for (uint64_t i = 0; i < item_count; i++) {
@@ -1675,6 +2063,7 @@ RC TPCCTxnManager::run_stock_level_2(uint64_t threshold, uint64_t &item_count, r
 }
 
 RC TPCCTxnManager::run_calvin_txn() {
+	// printf("batch_id = %ld , txn_id = %ld , enter into run_calvin_txn .\n",txn->batch_id,txn->txn_id);
 	RC rc = RCOK;
 	uint64_t starttime = get_sys_clock();
 	TPCCQuery* tpcc_query = (TPCCQuery*) query;
@@ -1700,7 +2089,7 @@ RC TPCCTxnManager::run_calvin_txn() {
 				DEBUG("(%ld,%ld) local reads\n",txn->txn_id,txn->batch_id);
 				rc = run_tpcc_phase2();
 				//release_read_locks(tpcc_query);
-
+				// printf("batch_id = %ld , txn_id = %ld , LRD , r = %d.\n",txn->batch_id,txn->txn_id,rc);
 				this->phase = CALVIN_SERVE_RD;
 				break;
 			case CALVIN_SERVE_RD:
@@ -1732,6 +2121,7 @@ RC TPCCTxnManager::run_calvin_txn() {
 				DEBUG("(%ld,%ld) execute writes\n",txn->txn_id,txn->batch_id);
 				rc = run_tpcc_phase5();
 				this->phase = CALVIN_DONE;
+				// printf("batch_id = %ld , txn_id = %ld , WR , r = %d.\n",txn->batch_id,txn->txn_id,rc);
 				break;
 			default:
 				assert(false);
@@ -2047,7 +2437,7 @@ RC TPCCTxnManager::process_aria_remote(ARIA_PHASE aria_phase) {
 RC TPCCTxnManager::run_tpcc_phase2() {
 	TPCCQuery* tpcc_query = (TPCCQuery*) query;
 	RC rc = RCOK;
-	assert(CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == SNAPPER || CC_ALG == CALVIN_W);
+	assert(CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == SNAPPER);
 
 	uint64_t w_id = tpcc_query->w_id;
 	uint64_t d_id = tpcc_query->d_id;
@@ -2124,7 +2514,7 @@ RC TPCCTxnManager::run_tpcc_phase2() {
 RC TPCCTxnManager::run_tpcc_phase5() {
 	TPCCQuery* tpcc_query = (TPCCQuery*) query;
 	RC rc = RCOK;
-	assert(CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == SNAPPER || CC_ALG == CALVIN_W);
+	assert(CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == SNAPPER);
 
 	uint64_t w_id = tpcc_query->w_id;
 	uint64_t d_id = tpcc_query->d_id;

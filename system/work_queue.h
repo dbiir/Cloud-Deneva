@@ -125,7 +125,7 @@ private:
   boost::lockfree::queue<work_queue_entry* > * aria_check_queue;
   boost::lockfree::queue<work_queue_entry* > * aria_commit_queue;
 #endif
-#if CC_ALG != CALVIN_W
+#if !(CC_ALG == CALVIN && CALVIN_W)
   uint64_t sched_ptr;
 #else
   uint64_t*sched_ptr;

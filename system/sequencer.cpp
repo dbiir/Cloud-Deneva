@@ -481,7 +481,7 @@ void Sequencer::send_next_batch(uint64_t thd_id) {
 		INC_STATS(thd_id,seq_full_batch_cnt,1);
 	}
 	INC_STATS(thd_id,seq_prep_time,get_sys_clock() - prof_stat);
-#if CC_ALG == CALVIN || CC_ALG == CALVIN_W
+#if CC_ALG == CALVIN
 	next_txn_id = 0;
 #elif CC_ALG == HDCC || CC_ALG == SNAPPER
 	last_epoch_max_id = next_txn_id;

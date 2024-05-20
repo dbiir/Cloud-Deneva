@@ -151,8 +151,7 @@ void TxnStats::commit_stats(uint64_t thd_id, uint64_t txn_id, uint64_t batch_id,
 	total_work_queue_cnt += work_queue_cnt;
 	assert(total_process_time >= process_time);
 
-#if CC_ALG == CALVIN || CC_ALG == CALVIN_W
-
+#if CC_ALG == CALVIN
 	INC_STATS(thd_id,lat_s_loc_work_queue_time,work_queue_time);
 	INC_STATS(thd_id,lat_s_loc_msg_queue_time,msg_queue_time);
 	INC_STATS(thd_id,lat_s_loc_cc_block_time,cc_block_time);
@@ -333,7 +332,7 @@ void Transaction::release(uint64_t thd_id) {
 }
 
 void TxnManager::init(uint64_t thd_id, Workload * h_wl) {
-#if CC_ALG == CALVIN_W
+#if CC_ALG == CALVIN && CALVIN_W
 	lockers_has_watched = (bool*)malloc(sizeof(bool)*g_sched_thread_cnt);
 	for(UInt32 i = 0 ; i < g_sched_thread_cnt ; i++)
 	{
@@ -376,7 +375,7 @@ void TxnManager::init(uint64_t thd_id, Workload * h_wl) {
 	_signal_abort = false;
 	_timestamp = glob_manager.get_ts(get_thd_id());
 #endif
-#if CC_ALG == CALVIN || CC_ALG == CALVIN_W
+#if CC_ALG == CALVIN
 	phase = CALVIN_RW_ANALYSIS;
 	locking_done = false;
 	calvin_locked_rows.init(MAX_ROW_PER_TXN);
@@ -441,7 +440,7 @@ void TxnManager::reset() {
 #else
 	lock_ready = false;
 #endif
-#if CC_ALG == CALVIN_W
+#if CC_ALG == CALVIN && CALVIN_W
 	for(UInt32 i = 0 ; i < g_sched_thread_cnt ; i++)
 	{
 		lockers_has_watched[i] = false;
@@ -476,7 +475,7 @@ void TxnManager::reset() {
 	uncommitted_reads->clear();
 #endif
 
-#if CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == CALVIN_W
+#if CC_ALG == CALVIN || CC_ALG == HDCC
 	phase = CALVIN_RW_ANALYSIS;
 	locking_done = false;
 	calvin_locked_rows.clear();
@@ -540,7 +539,7 @@ void TxnManager::release() {
 	delete uncommitted_reads;
 #endif
 
-#if CC_ALG == CALVIN || CC_ALG == CALVIN_W
+#if CC_ALG == CALVIN
 	calvin_locked_rows.release();
 #endif
 #if CC_ALG == SILO
@@ -610,7 +609,7 @@ RC TxnManager::commit() {
 	inout_table.set_state(get_thd_id(), get_txn_id(), SSI_COMMITTED);
 #endif
 	commit_stats();
-#if LOGGING && CC_ALG != CALVIN && CC_ALG != CALVIN_W
+#if LOGGING && CC_ALG != CALVIN
 #if CC_ALG == HDCC
 	if (algo != CALVIN) {
 		LogRecord * record = logger.createRecord(get_txn_id(),L_COMMIT,0,0,max_calvin_tid);
@@ -667,7 +666,7 @@ RC TxnManager::abort() {
 	if (IS_LOCAL(get_txn_id()) && warmup_done) {
 		INC_STATS_ARR(get_thd_id(),start_abort_commit_latency, timespan);
 	}
-#if LOGGING && CC_ALG != CALVIN && CC_ALG != CALVIN_W
+#if LOGGING && CC_ALG != CALVIN
 #if CC_ALG == HDCC
 	if (algo != CALVIN) {
 #endif
@@ -761,7 +760,7 @@ RC TxnManager::start_commit() {
 	RC rc = RCOK;
 	DEBUG("%ld start_commit RO?%d\n",get_txn_id(),query->readonly());
 	if(is_multi_part()) {
-#if LOGGING && CC_ALG != CALVIN && CC_ALG != CALVIN_W
+#if LOGGING && CC_ALG != CALVIN
 #if CC_ALG == HDCC
 	if (algo != CALVIN) {
 #endif
@@ -893,7 +892,7 @@ void TxnManager::send_finish_messages() {
 int TxnManager::received_response(RC rc) {
 	assert(txn->rc == RCOK || txn->rc == Abort);
 	if (txn->rc == RCOK) txn->rc = rc;
-#if CC_ALG == CALVIN || CC_ALG == CALVIN_W
+#if CC_ALG == CALVIN
 	++rsp_cnt;
 #elif CC_ALG == HDCC || CC_ALG == SNAPPER
 	if (algo == CALVIN) {
@@ -993,7 +992,7 @@ void TxnManager::commit_stats() {
 		INC_STATS(get_thd_id(),cflt_cnt_txn,1);
 	}*/
 	txn_stats.commit_stats(get_thd_id(),get_txn_id(),get_batch_id(),timespan_long, timespan_short);
-	#if CC_ALG == CALVIN || CC_ALG == CALVIN_W
+	#if CC_ALG == CALVIN
 	return;
 	#endif
 
@@ -1100,7 +1099,7 @@ void TxnManager::cleanup_row(RC rc, uint64_t rid) {
 	uint64_t version = 0;
 	// Handle calvin elsewhere
 
-#if CC_ALG != CALVIN && CC_ALG != CALVIN_W
+#if CC_ALG != CALVIN
 #if ISOLATION_LEVEL != READ_UNCOMMITTED
 	row_t * orig_r = txn->accesses[rid]->orig_row;
 #if CC_ALG == HDCC && DETERMINISTIC_ABORT_MODE
@@ -1237,12 +1236,22 @@ void TxnManager::cleanup(RC rc) {
 		CC_ALG == DLI_MVCC_BASE
 	dli_man.finish_trans(rc, this);
 #endif
-#if CC_ALG == CALVIN || CC_ALG == CALVIN_W
+#if CC_ALG == CALVIN
 	// cleanup locked rows
+	std::string str_out = "batch_id = " + std::to_string(get_batch_id()) +
+						" , txn_id = " + std::to_string(get_txn_id()) +" , unlock_keys:";
+	set<uint64_t> keys;
 	for (uint64_t i = 0; i < calvin_locked_rows.size(); i++) {
 		row_t * row = calvin_locked_rows[i];
+		keys.insert(row->get_primary_key());
 		row->return_row(rc,RD,this,row);
 	}
+	// for(auto key : keys)
+	// {
+	// 	str_out += " " + std::to_string(key);
+	// }
+	// str_out += ".\n";
+	// std::cout<<str_out<<std::flush;
 #endif
 #if CC_ALG == SNAPPER
 	if (algo == CALVIN) {
@@ -1440,7 +1449,7 @@ RC TxnManager::get_row(row_t * row, access_t type, row_t *& row_rtn) {
 
 #endif
 
-#if LOGGING && CC_ALG != CALVIN && CC_ALG != CALVIN_W
+#if LOGGING && CC_ALG != CALVIN
 	if (type == WR) {
 #if CC_ALG == HDCC
 		if (algo != CALVIN) {
@@ -1479,7 +1488,7 @@ RC TxnManager::get_row(row_t * row, access_t type, row_t *& row_rtn) {
 	INC_STATS(get_thd_id(), txn_manager_time, timespan);
 	row_rtn  = access->data;
 
-	if (CC_ALG == HSTORE || CC_ALG == HSTORE_SPEC || CC_ALG == CALVIN || CC_ALG == CALVIN_W) assert(rc == RCOK);
+	if (CC_ALG == HSTORE || CC_ALG == HSTORE_SPEC || CC_ALG == CALVIN) assert(rc == RCOK);
 	assert(rc == RCOK);
 	return rc;
 }
@@ -1695,7 +1704,7 @@ RC TxnManager::validate() {
 }
 
 RC TxnManager::send_remote_reads() {
-	assert(CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == SNAPPER || CC_ALG == CALVIN_W);
+	assert(CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == SNAPPER);
 #if !YCSB_ABORT_MODE && WORKLOAD == YCSB
 	return RCOK;
 #endif

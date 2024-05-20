@@ -1,0 +1,66 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import sys
+import re
+import io
+
+# 设置默认编码为utf-8
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
+def analyze_file(filename):
+    try:
+        with io.open(filename, 'r', encoding='utf-8') as file, io.open('res.txt', 'w', encoding='utf-8') as res_file:
+            transactions = {}
+            batch_id = None
+            txn_id = None
+
+            required_patterns = {
+                'rc': re.compile(r'rc\s*=\s*\d+'),
+                'enqueue': re.compile(r'enqueue work_queue'),
+                'taken': re.compile(r'has been taken by worker'),
+                'process': re.compile(r'will be process by worker'),
+                'run': re.compile(r'enter into run_calvin_txn\(\)'),
+                'wrapup': re.compile(r'enter into calvin_wrapup\(\)'),
+                'return': re.compile(r'will return msg to sequencer')
+            }
+
+            for line in file:
+                # 匹配事务开始的行
+                start_match = re.match(r'batch_id\s*=\s*(\d+)\s*,\s*txn_id\s*=\s*(\d+)', line)
+                if start_match:
+                    batch_id, txn_id = start_match.groups()
+                    key = (batch_id, txn_id)
+                    if key not in transactions:
+                        transactions[key] = {k: False for k in required_patterns}
+
+                # 检查每个必须的模式
+                if batch_id and txn_id:
+                    key = (batch_id, txn_id)
+                    for k, pattern in required_patterns.items():
+                        if pattern.search(line):
+                            transactions[key][k] = True
+
+            # 检查每个事务并输出结果
+            for (batch_id, txn_id), status in transactions.items():
+                missing = [k for k, v in status.items() if not v]
+                # 必须的行
+                required_missing = ['rc', 'taken', 'wrapup', 'return']
+                missing_required = [item for item in missing if item in required_missing]
+                if missing_required:
+                    res_file.write(f"batch_id = {batch_id} , txn_id = {txn_id} 欠缺带有{', '.join([required_patterns[item].pattern for item in missing_required])}的轨迹记录\n")
+
+        print("分析完成，结果已写入res.txt。")
+
+    except FileNotFoundError:
+        print(f"文件 {filename} 不存在。")
+    except Exception as e:
+        print(f"发生错误：{e}")
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print("使用方法: python3 analy <filename>")
+        sys.exit(1)
+
+    filename = sys.argv[1]
+    analyze_file(filename)

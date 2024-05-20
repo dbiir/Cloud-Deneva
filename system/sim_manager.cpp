@@ -28,11 +28,11 @@ void SimManager::init() {
 	txn_cnt = 0;
 	inflight_cnt = 0;
 	epoch_txn_cnt = 0;
-#if CC_ALG != CALVIN_W
-	worker_epoch = 1;
-#else
+#if CC_ALG == CALVIN && CALVIN_W
 	workers_epoch = (uint64_t*)std::malloc(sizeof(uint64_t)*g_sched_thread_cnt);
 	for(UInt32 i = 0 ; i < g_sched_thread_cnt ; i++){workers_epoch[i]=1;}
+#else
+	worker_epoch = 1;
 #endif
 	seq_epoch = 0;
 	rsp_cnt = g_total_node_cnt - 1;
@@ -142,7 +142,7 @@ void SimManager::advance_seq_epoch() {
 	last_seq_epoch_time += g_seq_batch_time_limit;
 }
 
-#if CC_ALG != CALVIN_W
+#if CC_ALG != CALVIN || (CC_ALG == CALVIN && !CALVIN_W)
 uint64_t SimManager::get_worker_epoch() { return worker_epoch; }
 
 void SimManager::next_worker_epoch() {

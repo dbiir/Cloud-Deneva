@@ -47,7 +47,7 @@ public:
   int algo;
   uint64_t orig_txn_id, orig_batch_id;
 #endif
-#if CC_ALG == CALVIN || CC_ALG == CALVIN_W
+#if CC_ALG == CALVIN
   bool is_seq2sto = false;
 #endif
   uint64_t wq_time;
@@ -175,7 +175,13 @@ public:
   void copy_to_txn(TxnManager * txn) {Message::mcopy_to_txn(txn);}
   uint64_t get_size();
   void init() {}
-  void release() {}
+  void release() {
+  #if WORKLOAD == YCSB
+    requests.release();
+  #else
+    items.release();
+  #endif
+  }
   // used 4 tpcc
   uint64_t txn_type;
     // common txn input for : payment new-order order-staus stock-level delivery
@@ -365,7 +371,7 @@ public:
 
   uint64_t pid;
   uint64_t ts;
-#if CC_ALG == CALVIN || CC_ALG == CALVIN_W
+#if CC_ALG == CALVIN
   uint64_t batch_id;
   uint64_t txn_id;
 #endif

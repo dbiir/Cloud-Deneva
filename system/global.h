@@ -354,7 +354,7 @@ enum RemReqType {
     LOG_MSG,
     LOG_MSG_RSP,
     LOG_FLUSHED,
-#if CC_ALG == CALVIN || CC_ALG == CALVIN_W
+#if CC_ALG == CALVIN
     CLOUD_LOG_TXN,      // used for cloud db, seq send to storage
     CLOUD_LOG_TXN_ACK,  // used for cloud db, storage send to seq
 #endif
@@ -425,8 +425,8 @@ enum TsType {R_REQ = 0, W_REQ, P_REQ, XP_REQ};
   (id >= g_node_cnt + g_client_node_cnt && \
    id < g_node_cnt + g_client_node_cnt + g_repl_cnt * g_node_cnt)
 #define ISCLIENTN(id) (id >= g_node_cnt && id < g_node_cnt + g_client_node_cnt)
-#define IS_LOCAL(tid) (tid % g_node_cnt == g_node_id || CC_ALG == CALVIN || CC_ALG == CALVIN_W)
-#define IS_REMOTE(tid) (tid % g_node_cnt != g_node_id || CC_ALG == CALVIN || CC_ALG == CALVIN_W)
+#define IS_LOCAL(tid) (tid % g_node_cnt == g_node_id || CC_ALG == CALVIN)
+#define IS_REMOTE(tid) (tid % g_node_cnt != g_node_id || CC_ALG == CALVIN)
 #define IS_LOCAL_KEY(key) (key % g_node_cnt == g_node_id)
 
 /*

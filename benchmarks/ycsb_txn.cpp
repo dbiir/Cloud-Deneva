@@ -51,8 +51,17 @@ void YCSBTxnManager::reset() {
 // WhiteBear: 一定是需要改的，根据线程确定数据分区，对事务分区内的数据项加锁，
 RC YCSBTxnManager::acquire_locks() {
   uint64_t starttime = get_sys_clock();
-#if CC_ALG != CALVIN_W
   assert(CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == SNAPPER);
+#if CALVIN_W
+  uint64_t now_sched_id = get_thd_id() % g_sched_thread_cnt;
+	lockers_has_watched[now_sched_id] = true;
+	if(this->acquired_lock_num == this->sum_lock_num &&
+		this->acquired_lock_num != 0)
+	{
+    printf("batch_id = %ld , txn_id = %ld , acquired_lock_num = %d , sum_lock_num = %d , rc = 3 .\n",
+  get_batch_id(),get_txn_id(),acquired_lock_num,sum_lock_num);
+		return RC::WAIT;
+	}
 #endif
   YCSBQuery* ycsb_query = (YCSBQuery*) query;
   locking_done = false;
@@ -60,9 +69,9 @@ RC YCSBTxnManager::acquire_locks() {
   incr_lr();
   assert(ycsb_query->requests.size() == g_req_per_query);
   assert(phase == CALVIN_RW_ANALYSIS);
-#if CC_ALG == CALVIN_W
-  uint32_t now_sched_id = get_thd_id() % g_sched_thread_cnt;
-  lockers_has_watched[now_sched_id] = true;
+#if CALVIN_W
+  // uint32_t now_sched_id = get_thd_id() % g_sched_thread_cnt;
+  // lockers_has_watched[now_sched_id] = true;
   bool belong_this_sched = false;
   bool need_count_sum_lock_num = false;
   if(this->sum_lock_num == 0) need_count_sum_lock_num = true;
@@ -77,7 +86,7 @@ RC YCSBTxnManager::acquire_locks() {
           req->key, GET_NODE_ID(part_id));
     if (GET_NODE_ID(part_id) != g_node_id) continue;  
     //  如果当前数据项不属于该节点处理下一个数据项
-#if CC_ALG == CALVIN_W
+#if CALVIN_W
     if(need_count_sum_lock_num) this->sum_lock_num++;
     uint32_t target_sched_id = belong_sched_id( req->key );
     if(target_sched_id != now_sched_id) continue;     
@@ -92,11 +101,11 @@ RC YCSBTxnManager::acquire_locks() {
     if(rc2 != RCOK) {
       rc = rc2;
     }
-#if CC_ALG == CALVIN_W
+#if CALVIN_W
     this->acquired_lock_num++;
 #endif
 	}
-#if CC_ALG == CALVIN_W
+#if CALVIN_W
   if(!belong_this_sched && ycsb_query->requests.size() > 0)
   {
     rc = RC::WAIT;          
@@ -119,6 +128,13 @@ RC YCSBTxnManager::acquire_locks() {
   txn_stats.wait_starttime = get_sys_clock();
   INC_STATS(get_thd_id(),calvin_sched_time,get_sys_clock() - starttime);
   locking_done = true;
+#if CALVIN_W
+  printf("batch_id = %ld , txn_id = %ld , acquired_lock_num = %d , sum_lock_num = %d , rc = %d .\n",
+  get_batch_id(),get_txn_id(),acquired_lock_num,sum_lock_num,rc);
+#else
+  printf("batch_id = %ld , txn_id = %ld , rc = %d .\n",
+  get_batch_id(),get_txn_id(),rc);
+#endif
   return rc;  //对于CALVIN来说，要么返回WAIT，要么返回RCOK
 }
 
@@ -654,9 +670,7 @@ RC YCSBTxnManager::run_aria_txn() {
 
 RC YCSBTxnManager::run_ycsb() {
   RC rc = RCOK;
-#if CC_ALG != CALVIN_W
   assert(CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == SNAPPER);
-#endif
   YCSBQuery* ycsb_query = (YCSBQuery*) query;
 
   for (uint64_t i = 0; i < ycsb_query->requests.size(); i++) {

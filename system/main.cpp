@@ -68,7 +68,7 @@ InputThread * input_thds;
 OutputThread * output_thds;
 AbortThread * abort_thds;
 LogThread * log_thds;
-#if CC_ALG == CALVIN || CC_ALG == CALVIN_W
+#if CC_ALG == CALVIN
 CalvinLockThread * calvin_lock_thds;
 CalvinSequencerThread * calvin_seq_thds;
 #endif
@@ -207,7 +207,7 @@ int main(int argc, char *argv[]) {
 	aria_seq.init(m_wl);
 	printf("Done\n");
 #endif
-#if CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == SNAPPER || CC_ALG == CALVIN_W
+#if CC_ALG == CALVIN || CC_ALG == HDCC || CC_ALG == SNAPPER
 	printf("Initializing sequencer... ");
 	fflush(stdout);
 	seq_man.init(m_wl);
@@ -312,12 +312,14 @@ int main(int argc, char *argv[]) {
 		all_thd_cnt += g_logger_thread_cnt;
 #endif
 #if CC_ALG == CALVIN
-		all_thd_cnt += 2; // sequencer + scheduler thread
-#endif
-#if CC_ALG == CALVIN_W
+#if CALVIN_W
 	all_thd_cnt += 1;					// sequencer thread
 	all_thd_cnt += g_sched_thread_cnt;	// scheduler threads
+#else
+	all_thd_cnt += 2; // sequencer + scheduler thread
 #endif
+#endif
+
 #if CC_ALG == SNAPPER
 	all_thd_cnt += 3;	// sequencer + scheduler thread + sanpper_check_thread
 #endif
@@ -349,12 +351,13 @@ int main(int argc, char *argv[]) {
 #endif
 
 #if CC_ALG == CALVIN
+#if CALVIN_W
+	calvin_seq_thds = new CalvinSequencerThread[1];
+	calvin_lock_thds = new CalvinLockThread[CAL_LOCK_CNT];
+#else
 	calvin_lock_thds = new CalvinLockThread[1];
 	calvin_seq_thds = new CalvinSequencerThread[1];
 #endif
-#if CC_ALG == CALVIN_W
-	calvin_seq_thds = new CalvinSequencerThread[1];
-	calvin_lock_thds = new CalvinLockThread[CAL_LOCK_CNT];
 #endif
 #if CC_ALG == SNAPPER
 	calvin_lock_thds = new CalvinLockThread[1];
@@ -459,12 +462,12 @@ int main(int argc, char *argv[]) {
 	}
 #endif
 
-#if CC_ALG != CALVIN && CC_ALG != ARIA && CC_ALG != CALVIN_W
+#if CC_ALG != CALVIN && CC_ALG != ARIA
 	abort_thds[0].init(id,g_node_id,m_wl);
 	pthread_create(&p_thds[id++], NULL, run_thread, (void *)&abort_thds[0]);
 #endif
 
-#if CC_ALG == CALVIN
+#if CC_ALG == CALVIN && !CALVIN_W
 #if SET_AFFINITY
 	CPU_ZERO(&cpus);
 	CPU_SET(cpu_cnt, &cpus);
@@ -484,7 +487,7 @@ int main(int argc, char *argv[]) {
 	calvin_seq_thds[0].init(id,g_node_id,m_wl);
 	pthread_create(&p_thds[id++], &attr, run_thread, (void *)&calvin_seq_thds[0]);
 #endif
-#if CC_ALG == CALVIN_W
+#if CC_ALG == CALVIN && CALVIN_W
 	for(UInt32 i = 0 ; i < g_sched_thread_cnt ; i++)
 	{
 #if SET_AFFINITY

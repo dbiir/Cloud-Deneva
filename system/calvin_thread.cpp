@@ -39,7 +39,7 @@
 #include <vector>
 #include "row.h"
 #endif
-#if CC_ALG == CALVIN || CC_ALG == CALVIN_W
+#if CC_ALG == CALVIN
 #include <map> //used for sequencer thread temporary store txn msg
 #endif
 
@@ -80,7 +80,7 @@ RC CalvinLockThread::run() {
 #endif
 		while (!txn_man->unset_ready()) {
 		}
-#if CC_ALG == CALVIN_W
+#if CALVIN_W
 		if(txn_man->worker_has_dealed)
 		{
 			txn_table.release_transaction_manager(get_thd_id(), txn_man->get_txn_id(),
@@ -93,7 +93,7 @@ RC CalvinLockThread::run() {
 
 		txn_man->txn_stats.lat_network_time_start = msg->lat_network_time;
 		txn_man->txn_stats.lat_other_time_start = msg->lat_other_time;
-#if CC_ALG == CALVIN_W
+#if CALVIN_W
 		if(ATOM_CAS(txn_man->has_ready,false,true))
 		{
 			msg->copy_to_txn(txn_man);
@@ -116,7 +116,9 @@ RC CalvinLockThread::run() {
 
 		if(rc == RCOK) {
 				// WhiteBear: 要避免多线程加锁一个事务不进队列或者进多次队列
-				work_queue.enqueue(_thd_id,msg,false);	
+				// printf("batch_id = %ld , txn_id = %ld , enqueue work_queue .\n",txn_man->get_batch_id(),txn_man->get_txn_id());
+				// fflush(stdout);
+				work_queue.enqueue(_thd_id,msg,false);
 		}
 		txn_man->set_ready();	
 		//原本的作用是避免多个线程操作同一个事务
@@ -281,9 +283,25 @@ RC CalvinSequencerThread::run() {
 				Message * msg_copy = Message::create_message(CLOUD_LOG_TXN);
 				LogCloudTxnMessage*log_msg_copy=(LogCloudTxnMessage*)msg_copy;
 				memcpy(log_msg_copy,log_msg,sizeof(LogCloudTxnMessage));
+#if WORKLOAD == YCSB
+				log_msg_copy->requests.init(g_req_per_query);
+				for(uint32_t i = 0 ; i < log_msg->requests.get_count() ; i++)
+				{
+					ycsb_request * req = log_msg->requests.get(i);
+					log_msg_copy->requests.add(req);
+				}
+#else
+				log_msg_copy->items.init(g_max_items_per_txn);
+				for(uint32_t i = 0 ; i < log_msg->items.get_count() ; i++)
+				{
+					Item_no * item = log_msg->items.get(i);
+					log_msg_copy->items.add(item);
+				}
+#endif
 				msg_queue.enqueue(get_thd_id(), msg_copy, g_node_cnt + g_client_node_cnt + j);
 			}
 			log_txn_msg->release();
+			delete log_txn_msg;
 			map_cloudlogid2counter[temp_txn_id] = 0;
 			map_cloudlogid2msg[temp_txn_id] = msg;
 		}else if(msg->get_rtype() == CLOUD_LOG_TXN_ACK)
@@ -298,7 +316,8 @@ RC CalvinSequencerThread::run() {
 				map_cloudlogid2counter.erase(log_flush_msg->txn_id);
 				map_cloudlogid2msg.erase(log_flush_msg->txn_id);
 			}
-			msg->release();			
+			msg->release();
+			delete msg;		
 		}else{
 			switch (rtype) {
 				case CALVIN_ACK:

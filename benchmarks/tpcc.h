@@ -122,7 +122,6 @@ private:
 	void init_permutation();
 	uint64_t get_permutation();
 	uint64_t get_permutation(uint64_t count);
-
 	static void * threadInitItem(void * This);
 	static void * threadInitWh(void * This);
 	static void * threadInitDist(void * This);

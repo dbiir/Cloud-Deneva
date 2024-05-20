@@ -44,9 +44,10 @@
 // ! Parameters used to locate distributed performance bottlenecks.
 
 #define SINGLE_WRITE_NODE false // Only one node writes data
-#define READONLY_OPTIMIZATION true // No more CC for read-only transaction
+#define READONLY_OPTIMIZATION false // No more CC for read-only transaction
 
-#define SECOND 130 // Set the queue monitoring time.
+// #define SECOND 130 // Set the queue monitoring time.
+#define SECOND 260 // Set the queue monitoring time.
 // #define THD_ID_QUEUE
 #define ONE_NODE_RECIEVE 0 // only node 0 will receive the txn query
 #if 0
@@ -115,7 +116,7 @@
 // # of transactions to run for warmup
 #define WARMUP            0
 // YCSB or TPCC or PPS or DA
-#define WORKLOAD TPCC
+#define WORKLOAD YCSB
 // print the transaction latency distribution
 #define PRT_LAT_DISTR false
 #define STATS_ENABLE        true
@@ -173,7 +174,7 @@
 // Concurrency Control
 /***********************************************/
 
-// WAIT_DIE, NO_WAIT, TIMESTAMP, MVCC, CALVIN, MAAT, WOOKONG, TICTOC, SI, CALVIN_W
+// WAIT_DIE, NO_WAIT, TIMESTAMP, MVCC, CALVIN, MAAT, WOOKONG, TICTOC, SI
 #define ISOLATION_LEVEL SERIALIZABLE
 #define CC_ALG CALVIN
 #define YCSB_ABORT_MODE false
@@ -215,6 +216,7 @@
 // [CALVIN]
 #define SEQ_THREAD_CNT 4
 // [CALVIN_W]
+#define CALVIN_W false
 #define SEQ_BATCH_SIZE 100    
 #define CAL_LOCK_CNT 2        
 // [HDCC]
@@ -284,8 +286,8 @@
 #define DATA_PERC 100
 #define ACCESS_PERC 0.03
 #define INIT_PARALLELISM 8
-#define SYNTH_TABLE_SIZE 16777216
-#define ZIPF_THETA 0.99
+#define SYNTH_TABLE_SIZE 2097152
+#define ZIPF_THETA 0.9
 #define TXN_WRITE_PERC 1
 #define TUP_WRITE_PERC 0.2
 #define SCAN_PERC           0
@@ -310,9 +312,9 @@
 // are not modeled.
 #define TPCC_ACCESS_ALL       false
 #define WH_UPDATE         false
-#define NUM_WH 8
+#define NUM_WH 32
 // % of transactions that access multiple partitions
-#define MPR 0
+#define MPR 0.2
 #define MPIR 0.01
 #define MPR_NEWORDER MPR
 enum TPCCTable {
@@ -455,7 +457,7 @@ enum PPSTxnType {
 #define HDCC 29
 #define SNAPPER 30
 #define ARIA 31
-#define CALVIN_W 32
+
 // TIMESTAMP allocation method.
 #define TS_MUTEX          1
 #define TS_CAS            2
@@ -503,6 +505,8 @@ enum PPSTxnType {
 #define PROG_TIMER 10 * BILLION // in s
 #define BATCH_TIMER 0
 #define SEQ_BATCH_TIMER 5 * 1 * MILLION // ~5ms -- same as CALVIN paper
+#define DONE_TIMER 1 * 30 * BILLION // ~1 minutes
+#define WARMUP_TIMER 1 * 30 * BILLION // ~1 minutes
 #define DONE_TIMER 1 * 30 * BILLION // ~1 minutes
 #define WARMUP_TIMER 1 * 30 * BILLION // ~1 minutes
 #define STATS_EVERY_INTERVAL true

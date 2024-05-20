@@ -21,7 +21,7 @@ enum LogIUD {
   L_INSERT = 0,
   L_UPDATE,
   L_DELETE,
-#if CC_ALG == CALVIN || CC_ALG == CALVIN_W
+#if CC_ALG == CALVIN
   L_CLOUD_TXN,  // used for seq send each txn to storage
 #endif
   L_COMMIT,

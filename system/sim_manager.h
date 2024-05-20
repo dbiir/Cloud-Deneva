@@ -39,7 +39,7 @@ public:
   uint64_t run_starttime;
   uint64_t rsp_cnt;
   uint64_t seq_epoch;
-#if CC_ALG == CALVIN_W
+#if CC_ALG == CALVIN && CALVIN_W
   uint64_t * workers_epoch;
 #else
   uint64_t worker_epoch;
@@ -67,7 +67,7 @@ public:
   void inc_txn_cnt();
   void inc_inflight_cnt();
   void dec_inflight_cnt();
-#if CC_ALG == CALVIN_W
+#if CC_ALG == CALVIN && CALVIN_W
   uint64_t get_worker_epoch(uint32_t locker_id);
   void next_worker_epoch(uint32_t locker_id);
 #else
