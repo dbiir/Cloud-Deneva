@@ -365,6 +365,7 @@ void TxnManager::init(uint64_t thd_id, Workload * h_wl) {
 	sum_lock_num = 0;
 	has_ready = false;
 #endif
+	cache_not_ready = false;
 	uint64_t prof_starttime = get_sys_clock();
 	if(!txn)  {
 	DEBUG_M("Transaction alloc\n");
@@ -476,6 +477,7 @@ void TxnManager::reset() {
 	acquired_lock_num = 0;
 	sum_lock_num = 0;
 #endif
+	cache_not_ready = false;
 	lock_ready_cnt = 0;
 	locking_done = true;
 #if CC_ALG == DLI_MVCC || CC_ALG == DLI_MVCC_OCC
@@ -1674,7 +1676,11 @@ void TxnManager::process_cache(uint64_t thd_id, Message * msg) {
 			assert(valid);
 			WaitTxnNode * node = row->cache_node->wait_list_head;
 			while (node) {
-				work_queue.enqueue(thd_id, Message::create_message(node->txn_man, RSTO_RSP), false);
+				Message * msg = Message::create_message(node->txn_man, RSTO_RSP);
+				RStorageResponseMessage * rsto_rsp_msg = (RStorageResponseMessage *) msg;
+				rsto_rsp_msg->row = row;
+				// printf("batch=%ld, txn=%ld send rsp to batch=%ld, txn=%ld\n", txn->batch_id, txn->txn_id, node->txn_man->txn->batch_id, node->txn_man->txn->txn_id);
+				work_queue.enqueue(thd_id, msg, false);
 				LIST_REMOVE_HT(node, row->cache_node->wait_list_head, row->cache_node->wait_list_tail);
 				WaitTxnNode * old_node = node;
 				node = node->next;
@@ -1686,21 +1692,26 @@ void TxnManager::process_cache(uint64_t thd_id, Message * msg) {
 		}
 	}
 	else {
+		RStorageResponseMessage * rsto_rsp_msg = (RStorageResponseMessage *) msg;
 		for (auto it = row_wait_for_cache->begin(); it != row_wait_for_cache->end(); ) {
-		row_t * row = it->first;
-		pthread_mutex_lock(row->cache_node->locker);
-		if (row->cache_node->use_cache_num >= 0) {
-			// row->cache_node->use_cache_num++;
-			row_cache.move_to_tail(this, row->cache_node, hash_key_or_wh_to_cache(row));
-			it = row_wait_for_cache->erase(it);
-			// printf("batch=%ld, txn=%ld get row=%ld cache after wait\n", get_batch_id(), get_txn_id(), row->get_primary_key());
-		} else {
-			++it;
-		}
-		pthread_mutex_unlock(row->cache_node->locker);
+			row_t * row = it->first;
+			if (rsto_rsp_msg->row == row) {
+				pthread_mutex_lock(row->cache_node->locker);
+				if (row->cache_node->use_cache_num >= 0) {
+					// row->cache_node->use_cache_num++;
+					row_cache.move_to_tail(this, row->cache_node, hash_key_or_wh_to_cache(row));
+					it = row_wait_for_cache->erase(it);
+					// printf("batch=%ld, txn=%ld get row=%ld cache after wait\n", get_batch_id(), get_txn_id(), row->get_primary_key());
+				} else {
+					++it;
+				}
+				pthread_mutex_unlock(row->cache_node->locker);
+			} else {
+				++it;
+			}
 		}
 	}
-	if (row_wait_for_cache->size() == 0) {
+	if (!cache_not_ready && row_wait_for_cache->size() == 0) {
 		// printf("batch=%ld, txn=%ld cache_ready\n", get_batch_id(), get_txn_id());
 		cache_ready = true;
 	}

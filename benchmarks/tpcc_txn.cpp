@@ -800,17 +800,19 @@ RC TPCCTxnManager::acquire_locks() {
 	if(belong_this_sched)
 	{
 		if (row_wait_for_cache->size() > 0) {
-		Message * msg = Message::create_message(this,RSTO);
-		RStorageMessage * rmsg = (RStorageMessage *) msg;
-		rmsg->table_ids.init(need_require_cache_num);
-		rmsg->keys.init(need_require_cache_num);
-		for (uint64_t i = 0; i < row_wait_for_cache->size(); i++) {
-		if (row_wait_for_cache->at(i).second) {
-			rmsg->table_ids.add(row_wait_for_cache->at(i).first->get_table()->get_table_id());
-			rmsg->keys.add(row_wait_for_cache->at(i).first->get_primary_key());
-		}
-		}
-		msg_queue.enqueue(get_thd_id(), msg, g_node_id / g_servers_per_storage + g_node_cnt + g_client_node_cnt);
+			if (need_require_cache_num > 0) {
+				Message * msg = Message::create_message(this,RSTO);
+				RStorageMessage * rmsg = (RStorageMessage *) msg;
+				rmsg->table_ids.init(need_require_cache_num);
+				rmsg->keys.init(need_require_cache_num);
+				for (uint64_t i = 0; i < row_wait_for_cache->size(); i++) {
+				if (row_wait_for_cache->at(i).second) {
+					rmsg->table_ids.add(row_wait_for_cache->at(i).first->get_table()->get_table_id());
+					rmsg->keys.add(row_wait_for_cache->at(i).first->get_primary_key());
+				}
+				}
+				msg_queue.enqueue(get_thd_id(), msg, g_node_id / g_servers_per_storage + g_node_cnt + g_client_node_cnt);
+			}
 		} else {
 			cache_ready = true;
 		}

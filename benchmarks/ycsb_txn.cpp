@@ -124,29 +124,36 @@ RC YCSBTxnManager::acquire_locks() {
   {
     rc = RC::WAIT;
   }
+  if (this->acquired_lock_num != this->sum_lock_num) {
+    cache_not_ready = true;
+  } else {
+    cache_not_ready = false;
+  }
 #else
   if(decr_lr() == 0) {
     if (ATOM_CAS(lock_ready, false, true)) rc = RCOK;
   }
 #endif
-  if(belong_this_sched)
-  {
-    if (row_wait_for_cache->size() > 0) {
-      Message * msg = Message::create_message(this,RSTO);
-      RStorageMessage * rmsg = (RStorageMessage *) msg;
-      rmsg->table_ids.init(need_require_cache_num);
-      rmsg->keys.init(need_require_cache_num);
-      for (uint64_t i = 0; i < row_wait_for_cache->size(); i++) {
-        if (row_wait_for_cache->at(i).second) {
-          rmsg->table_ids.add(row_wait_for_cache->at(i).first->get_table()->get_table_id());
-          rmsg->keys.add(row_wait_for_cache->at(i).first->get_primary_key());
-        }
-      }
-      msg_queue.enqueue(get_thd_id(), msg, g_node_id / g_servers_per_storage + g_node_cnt + g_client_node_cnt);
-    } else {
-      cache_ready = true;
-    }
-  }
+  if(belong_this_sched && !cache_not_ready)
+	{
+		if (row_wait_for_cache->size() > 0) {
+			if (need_require_cache_num > 0) {
+				Message * msg = Message::create_message(this,RSTO);
+				RStorageMessage * rmsg = (RStorageMessage *) msg;
+				rmsg->table_ids.init(need_require_cache_num);
+				rmsg->keys.init(need_require_cache_num);
+				for (uint64_t i = 0; i < row_wait_for_cache->size(); i++) {
+				if (row_wait_for_cache->at(i).second) {
+					rmsg->table_ids.add(row_wait_for_cache->at(i).first->get_table()->get_table_id());
+					rmsg->keys.add(row_wait_for_cache->at(i).first->get_primary_key());
+				}
+				}
+				msg_queue.enqueue(get_thd_id(), msg, g_node_id / g_servers_per_storage + g_node_cnt + g_client_node_cnt);
+			}
+		} else {
+			cache_ready = true;
+		}
+	}
 
   txn_stats.wait_starttime = get_sys_clock();
   INC_STATS(get_thd_id(),calvin_sched_time,get_sys_clock() - starttime);

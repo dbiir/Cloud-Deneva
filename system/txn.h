@@ -181,7 +181,8 @@ public:
 	bool * lockers_has_watched;
 	bool worker_has_dealed;
 	bool has_ready = false;
-#endif	
+#endif
+	bool			cache_not_ready;
 	void            register_thread(Thread * h_thd);
 	uint64_t        get_thd_id();
 	Workload *      get_wl();

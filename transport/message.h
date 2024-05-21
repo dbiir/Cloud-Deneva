@@ -240,7 +240,7 @@ public:
   void init();
   void release();
 
-  // uint64_t size;
+  row_t * row;
   // Array<uint64_t> results;
 };
 
