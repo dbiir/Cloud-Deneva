@@ -175,13 +175,11 @@ public:
 #endif
 	void			process_cache(uint64_t thd_id, Message * msg);
 	void			get_cache(row_t *&row);
-#if CC_ALG == CALVIN && CALVIN_W
 	uint32_t acquired_lock_num = 0; // 用于确定当前事务有多少个数据项获得了锁
 	uint32_t sum_lock_num = 0;		// 当前事务总共有多少个数据项需要在当前节点获得锁
 	bool * lockers_has_watched;
 	bool worker_has_dealed;
 	bool has_ready = false;
-#endif
 	bool			cache_not_ready;
 	void            register_thread(Thread * h_thd);
 	uint64_t        get_thd_id();

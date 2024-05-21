@@ -421,7 +421,7 @@ int main(int argc, char *argv[]) {
 	pthread_barrier_init( &warmup_bar, NULL, all_thd_cnt);
 
 #if SET_AFFINITY
-	uint64_t cpu_cnt = 0;
+	uint64_t cpu_cnt = 12;
 	cpu_set_t cpus;
 #endif
 	// spawn and run txns again.

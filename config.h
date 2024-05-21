@@ -43,13 +43,7 @@
 
 // ! Parameters used to locate distributed performance bottlenecks.
 
-// CLOUD
-#define SINGLE_WRITE_NODE true // Only one node writes data
-#define READONLY_OPTIMIZATION true // No more CC for read-only transaction
-#define VERSION_CNT 5 // The number of versions stored in the tuple
-#define REPLAY_BATCH_SIZE 1000 // The number of transactions replayed in one batch
-#define CACHE_MAX_ROW 1000000 // The maximum number of rows stored in the cache
-#define CACHE_LIST_NUM 512 // The number of cache lists
+
 
 // #define SECOND 130 // Set the queue monitoring time.
 #define SECOND 260 // Set the queue monitoring time.
@@ -74,7 +68,7 @@
 /***********************************************/
 // Simulation + Hardware
 /***********************************************/
-#define NODE_CNT 1
+#define NODE_CNT 3
 #define THREAD_CNT 16
 #define REM_THREAD_CNT 2
 #define SEND_THREAD_CNT 2
@@ -221,7 +215,7 @@
 // [CALVIN]
 #define SEQ_THREAD_CNT 4
 // [CALVIN_W]
-#define CALVIN_W false
+#define CALVIN_W true
 #define SEQ_BATCH_SIZE 100    
 #define CAL_LOCK_CNT 2        
 // [HDCC]
@@ -291,10 +285,10 @@
 #define DATA_PERC 100
 #define ACCESS_PERC 0.03
 #define INIT_PARALLELISM 8
-#define SYNTH_TABLE_SIZE 2097152
-#define ZIPF_THETA 0.9
-#define TXN_WRITE_PERC 1
-#define TUP_WRITE_PERC 0.2
+#define SYNTH_TABLE_SIZE 1048576
+#define ZIPF_THETA 0.3
+#define TXN_WRITE_PERC 0.3
+#define TUP_WRITE_PERC 1
 #define SCAN_PERC           0
 #define SCAN_LEN          20
 #define PART_PER_TXN 2
@@ -522,6 +516,19 @@ enum PPSTxnType {
 #define SEED 0
 #define SHMEM_ENV false
 #define ENVIRONMENT_EC2 false
+
+#if CC_ALG != SILO
+// CLOUD
+#define SINGLE_WRITE_NODE false // Only one node writes data
+#define READONLY_OPTIMIZATION true // No more CC for read-only transaction
+#else
+#define SINGLE_WRITE_NODE true // Only one node writes data
+#define READONLY_OPTIMIZATION true // No more CC for read-only transaction
+#endif
+#define VERSION_CNT 1 // The number of versions stored in the tuple
+#define REPLAY_BATCH_SIZE 1000 // The number of transactions replayed in one batch
+#define CACHE_MAX_ROW 1000000
+#define CACHE_LIST_NUM 512 // The number of cache lists
 
 #endif
 

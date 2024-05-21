@@ -1400,6 +1400,7 @@ RC WorkerThread::process_rsto_rsp(Message * msg) {
   check_if_done(rc);
   return rc;
 #else
+  // printf("batch=%ld, txn=%ld rsto_rsp from=%ld\n", msg->batch_id, msg->txn_id, msg->return_node_id);
   txn_man->process_cache(get_thd_id(), msg);
   if (txn_man->cache_ready && txn_man->rtxn_but_wait) {
     RC rc = txn_man->run_calvin_txn();
@@ -1471,7 +1472,7 @@ RC WorkerThread::process_calvin_rtxn(Message * msg) {
       return Abort;
     }
   #endif
-    // printf("batch=%ld, txn=%ld commit on rsto_rsp\n", txn_man->txn->batch_id, txn_man->txn->txn_id);
+    // printf("batch=%ld, txn=%ld commit on rtxn\n", txn_man->txn->batch_id, txn_man->txn->txn_id);
     calvin_wrapup();
   }
   return RCOK;

@@ -63,6 +63,7 @@ RC YCSBTxnManager::acquire_locks() {
 	}
 #endif
   YCSBQuery* ycsb_query = (YCSBQuery*) query;
+  bool is_read_only = ycsb_query->readonly();
   locking_done = false;
   RC rc = WAIT;
   incr_lr();
@@ -100,11 +101,13 @@ RC YCSBTxnManager::acquire_locks() {
 		row_t * row = ((row_t *)item->location);
 
     get_cache(row);
-
-    RC rc2 = get_lock(row,req->acctype);
-    if(rc2 != RCOK) {
-      rc = rc2;
-    }
+    if(!is_read_only)
+    {
+      RC rc2 = get_lock(row,req->acctype);
+      if(rc2 != RCOK) {
+        rc = rc2;
+      }
+    }    
 #if CALVIN_W
     this->acquired_lock_num++;
 #endif
