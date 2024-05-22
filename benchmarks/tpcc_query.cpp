@@ -312,8 +312,14 @@ BaseQuery * TPCCQueryGenerator::gen_new_order(uint64_t home_partition) {
         partitions_accessed.insert(wh_to_part(item->ol_supply_w_id));
       } else {
         // select warehouse from among those already selected
-        while (partitions_accessed.count(wh_to_part(item->ol_supply_w_id = URand(1, g_num_wh))) == 0) {
-        }
+        // while (partitions_accessed.count(wh_to_part(item->ol_supply_w_id = URand(1, g_num_wh))) == 0) {
+        // }
+#if SINGLE_WRITE_NODE
+        item->ol_supply_w_id = query->w_id;
+#else
+        uint64_t index = rand() % 2;
+        item->ol_supply_w_id = query->items[index]->ol_supply_w_id;
+#endif
       }
     }
 

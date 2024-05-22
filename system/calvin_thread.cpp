@@ -279,7 +279,8 @@ RC CalvinSequencerThread::run() {
 			cloud_log_id++;
 			log_msg->txn_id = temp_txn_id;
 			log_msg->copy_from_msg(msg);
-			for (uint64_t j = 0; j < g_storage_log_node_cnt; j++) { //这个for循环是向每个storage发消息
+			// for (uint64_t j = 0; j < g_storage_log_node_cnt; j++) { //这个for循环是向每个storage发消息
+			for (uint64_t j = 0; j < 1; j++) {
 				Message * msg_copy = Message::create_message(CLOUD_LOG_TXN);
 				LogCloudTxnMessage*log_msg_copy=(LogCloudTxnMessage*)msg_copy;
 				memcpy(log_msg_copy,log_msg,sizeof(LogCloudTxnMessage));
@@ -298,7 +299,8 @@ RC CalvinSequencerThread::run() {
 					log_msg_copy->items.add(item);
 				}
 #endif
-				msg_queue.enqueue(get_thd_id(), msg_copy, g_node_cnt + g_client_node_cnt + j);
+				// msg_queue.enqueue(get_thd_id(), msg_copy, g_node_cnt + g_client_node_cnt + j);
+				msg_queue.enqueue(get_thd_id(), msg_copy, g_node_cnt + g_client_node_cnt + g_node_id);
 			}
 			log_txn_msg->release();
 			delete log_txn_msg;
@@ -308,7 +310,8 @@ RC CalvinSequencerThread::run() {
 		{
 			LogFlushedMessage * log_flush_msg = (LogFlushedMessage*)(msg);
 			map_cloudlogid2counter[log_flush_msg->txn_id]++;
-			if(map_cloudlogid2counter[log_flush_msg->txn_id] == g_storage_log_node_cnt)
+			// if(map_cloudlogid2counter[log_flush_msg->txn_id] == g_storage_log_node_cnt)
+			if(map_cloudlogid2counter[log_flush_msg->txn_id] == 1)
 			{
 				Message * client_msg = map_cloudlogid2msg[log_flush_msg->txn_id];
 				assert(client_msg);

@@ -520,7 +520,11 @@ enum PPSTxnType {
 #if CC_ALG != SILO
 // CLOUD
 #define SINGLE_WRITE_NODE false // Only one node writes data
+#if WORKLOAD == YCSB
 #define READONLY_OPTIMIZATION true // No more CC for read-only transaction
+#else
+#define READONLY_OPTIMIZATION false
+#endif
 #else
 #define SINGLE_WRITE_NODE true // Only one node writes data
 #define READONLY_OPTIMIZATION true // No more CC for read-only transaction
